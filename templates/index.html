@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MT5 Trader思考解析 & 売買システム</title>
+    <script src="https://unpkg.com/lightweight-charts@4.1.0/dist/lightweight-charts.standalone.production.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            min-height: 100vh;
+        }
+        .header {
+            background: #16213e;
+            padding: 15px 20px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        .header h1 {
+            font-size: 1.3rem;
+            color: #4cc9f0;
+        }
+        .controls {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .control-group label {
+            font-size: 0.85rem;
+            color: #aaa;
+        }
+        select, input {
+            background: #0f3460;
+            border: 1px solid #4cc9f0;
+            color: #fff;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 0.9rem;
+        }
+        select:focus, input:focus {
+            outline: none;
+            border-color: #7b2cbf;
+        }
+        button {
+            background: #4cc9f0;
+            color: #1a1a2e;
+            border: none;
+            padding: 8px 20px;
+            border-radius: 4px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        button:hover {
+            background: #7b2cbf;
+            color: #fff;
+        }
+        button:disabled {
+            background: #555;
+            cursor: not-allowed;
+        }
+        .btn-start {
+            background: #26a69a;
+        }
+        .btn-start:hover {
+            background: #2bbbad;
+        }
+        .btn-stop {
+            background: #ef5350;
+        }
+        .btn-stop:hover {
+            background: #ff6b68;
+        }
+        .main-container {
+            display: flex;
+            height: calc(100vh - 70px);
+        }
+        #chart-container {
+            flex: 1;
+            padding: 10px;
+        }
+        #chart {
+            width: 100%;
+            height: 100%;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .info-bar {
+            position: absolute;
+            top: 90px;
+            left: 20px;
+            background: rgba(22, 33, 62, 0.9);
+            padding: 10px 15px;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            z-index: 100;
+        }
+        .info-bar .price {
+            font-size: 1.1rem;
+            font-weight: bold;
+        }
+        .info-bar .up { color: #26a69a; }
+        .info-bar .down { color: #ef5350; }
+        .loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 1.2rem;
+            color: #4cc9f0;
+        }
+        .error {
+            color: #ef5350;
+            padding: 20px;
+            text-align: center;
+        }
+
+        /* Collector Panel */
+        .collector-panel {
+            width: 350px;
+            background: #16213e;
+            border-left: 1px solid #2B2B43;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+        .panel-section {
+            padding: 15px;
+            border-bottom: 1px solid #2B2B43;
+        }
+        .panel-section h3 {
+            color: #4cc9f0;
+            font-size: 0.95rem;
+            margin-bottom: 12px;
+        }
+        .status-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+        .status-item {
+            background: #0f3460;
+            padding: 8px 12px;
+            border-radius: 4px;
+        }
+        .status-item .label {
+            font-size: 0.75rem;
+            color: #888;
+        }
+        .status-item .value {
+            font-size: 1rem;
+            font-weight: bold;
+        }
+        .status-running { color: #26a69a; }
+        .status-stopped { color: #ef5350; }
+        .collector-controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .collector-controls button {
+            flex: 1;
+        }
+
+        /* Thought Input */
+        .thought-input-section {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        .pending-actions {
+            margin-bottom: 10px;
+        }
+        .pending-action {
+            background: #7b2cbf;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 8px;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        .pending-action .action-type {
+            font-weight: bold;
+            font-size: 1.1rem;
+        }
+        .pending-action .action-time {
+            font-size: 0.8rem;
+            color: #ddd;
+        }
+        .thought-form {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .thought-form textarea {
+            background: #0f3460;
+            border: 1px solid #4cc9f0;
+            color: #fff;
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            resize: vertical;
+            min-height: 100px;
+        }
+        .thought-form textarea:focus {
+            outline: none;
+            border-color: #7b2cbf;
+        }
+        .thought-form select {
+            width: 100%;
+        }
+
+        /* Recent Data */
+        .recent-data {
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .data-item {
+            background: #0f3460;
+            padding: 8px 10px;
+            border-radius: 4px;
+            margin-bottom: 6px;
+            font-size: 0.85rem;
+        }
+        .data-item .action-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-size: 0.75rem;
+            font-weight: bold;
+            margin-right: 8px;
+        }
+        .action-BUY { background: #26a69a; }
+        .action-SELL { background: #4cc9f0; }
+        .action-STOP_LOSS { background: #ef5350; }
+        .action-HOLD { background: #555; }
+        .data-item .thought-preview {
+            color: #888;
+            font-size: 0.8rem;
+            margin-top: 4px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>MT5 Trader思考解析 & 売買システム</h1>
+        <div class="controls">
+            <div class="control-group">
+                <label>銘柄:</label>
+                <select id="symbol">
+                    <option value="XAUUSD">XAUUSD</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label>時間足:</label>
+                <select id="timeframe">
+                    <option value="M1">1分</option>
+                    <option value="M5">5分</option>
+                    <option value="M15">15分</option>
+                    <option value="M30">30分</option>
+                    <option value="H1" selected>1時間</option>
+                    <option value="H4">4時間</option>
+                    <option value="D1">日足</option>
+                    <option value="W1">週足</option>
+                    <option value="MN1">月足</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label>本数:</label>
+                <input type="number" id="count" value="200" min="10" max="1000" style="width: 80px;">
+            </div>
+            <button id="loadBtn">更新</button>
+        </div>
+    </div>
+
+    <div class="main-container">
+        <div class="info-bar" id="infoBar">
+            <span id="symbolInfo">XAUUSD</span> |
+            <span id="priceInfo" class="price">---</span>
+        </div>
+
+        <div id="chart-container">
+            <div id="chart"></div>
+        </div>
+
+        <div class="collector-panel">
+            <!-- Status Section -->
+            <div class="panel-section">
+                <h3>データ収集</h3>
+                <div class="status-grid">
+                    <div class="status-item">
+                        <div class="label">状態</div>
+                        <div class="value" id="collectorStatus">停止中</div>
+                    </div>
+                    <div class="status-item">
+                        <div class="label">スクリーンショット</div>
+                        <div class="value" id="screenshotCount">0</div>
+                    </div>
+                    <div class="status-item">
+                        <div class="label">アクション検出</div>
+                        <div class="value" id="actionCount">0</div>
+                    </div>
+                    <div class="status-item">
+                        <div class="label">最終更新</div>
+                        <div class="value" id="lastUpdate">---</div>
+                    </div>
+                </div>
+                <div class="collector-controls">
+                    <button class="btn-start" id="startBtn" onclick="startCollector()">開始</button>
+                    <button class="btn-stop" id="stopBtn" onclick="stopCollector()" disabled>停止</button>
+                </div>
+            </div>
+
+            <!-- Thought Input Section -->
+            <div class="panel-section thought-input-section">
+                <h3>思考入力</h3>
+                <div class="pending-actions" id="pendingActions">
+                    <!-- Pending actions will be inserted here -->
+                </div>
+                <div class="thought-form">
+                    <select id="actionSelect">
+                        <option value="BUY">買いエントリー (BUY)</option>
+                        <option value="SELL">決済・利確 (SELL)</option>
+                        <option value="STOP_LOSS">損切り (STOP_LOSS)</option>
+                        <option value="HOLD">見送り (HOLD)</option>
+                    </select>
+                    <textarea id="thoughtInput" placeholder="この判断をした理由を入力...&#10;例: RSI30以下で反発、サポートラインで買いエントリー"></textarea>
+                    <button onclick="submitThought()">思考を記録</button>
+                </div>
+            </div>
+
+            <!-- Recent Data Section -->
+            <div class="panel-section">
+                <h3>最近の記録</h3>
+                <div class="recent-data" id="recentData">
+                    <!-- Recent data will be inserted here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="loading" id="loading" style="display: none;">読み込み中...</div>
+
+    <script>
+        let chart = null;
+        let candleSeries = null;
+        let volumeSeries = null;
+        let ws = null;
+        let statusInterval = null;
+
+        // チャート初期化
+        function initChart() {
+            const container = document.getElementById('chart');
+
+            chart = LightweightCharts.createChart(container, {
+                layout: {
+                    background: { type: 'solid', color: '#1a1a2e' },
+                    textColor: '#d1d4dc',
+                },
+                grid: {
+                    vertLines: { color: '#2B2B43' },
+                    horzLines: { color: '#2B2B43' },
+                },
+                crosshair: {
+                    mode: LightweightCharts.CrosshairMode.Normal,
+                },
+                rightPriceScale: {
+                    borderColor: '#2B2B43',
+                },
+                timeScale: {
+                    borderColor: '#2B2B43',
+                    timeVisible: true,
+                    secondsVisible: false,
+                },
+            });
+
+            // ローソク足シリーズ
+            candleSeries = chart.addCandlestickSeries({
+                upColor: '#26a69a',
+                downColor: '#ef5350',
+                borderDownColor: '#ef5350',
+                borderUpColor: '#26a69a',
+                wickDownColor: '#ef5350',
+                wickUpColor: '#26a69a',
+            });
+
+            // 出来高シリーズ
+            volumeSeries = chart.addHistogramSeries({
+                color: '#4cc9f0',
+                priceFormat: {
+                    type: 'volume',
+                },
+                priceScaleId: '',
+                scaleMargins: {
+                    top: 0.8,
+                    bottom: 0,
+                },
+            });
+
+            // クロスヘア移動時の情報更新
+            chart.subscribeCrosshairMove((param) => {
+                if (param.time && param.seriesData.get(candleSeries)) {
+                    const data = param.seriesData.get(candleSeries);
+                    updatePriceInfo(data);
+                }
+            });
+
+            // リサイズ対応
+            window.addEventListener('resize', () => {
+                chart.applyOptions({
+                    width: container.clientWidth,
+                    height: container.clientHeight,
+                });
+            });
+        }
+
+        // 価格情報更新
+        function updatePriceInfo(data) {
+            const priceInfo = document.getElementById('priceInfo');
+            const change = data.close - data.open;
+            const changeClass = change >= 0 ? 'up' : 'down';
+            const sign = change >= 0 ? '+' : '';
+
+            priceInfo.innerHTML = `
+                O: ${data.open.toFixed(2)}
+                H: ${data.high.toFixed(2)}
+                L: ${data.low.toFixed(2)}
+                C: <span class="${changeClass}">${data.close.toFixed(2)} (${sign}${change.toFixed(2)})</span>
+            `;
+        }
+
+        // 銘柄一覧を取得
+        async function loadSymbols() {
+            try {
+                const res = await fetch('/api/symbols');
+                const data = await res.json();
+                const select = document.getElementById('symbol');
+                select.innerHTML = '';
+                data.symbols.forEach(s => {
+                    const option = document.createElement('option');
+                    option.value = s;
+                    option.textContent = s;
+                    if (s === 'XAUUSD') option.selected = true;
+                    select.appendChild(option);
+                });
+            } catch (e) {
+                console.error('銘柄取得エラー:', e);
+            }
+        }
+
+        // OHLCデータを取得してチャート更新
+        async function loadOHLC() {
+            const symbol = document.getElementById('symbol').value;
+            const timeframe = document.getElementById('timeframe').value;
+            const count = document.getElementById('count').value;
+
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('loadBtn').disabled = true;
+
+            try {
+                const res = await fetch(`/api/ohlc?symbol=${symbol}&timeframe=${timeframe}&count=${count}`);
+                const data = await res.json();
+
+                if (data.data && data.data.length > 0) {
+                    // ローソク足データをセット
+                    candleSeries.setData(data.data);
+
+                    // 出来高データをセット
+                    const volumeData = data.data.map(d => ({
+                        time: d.time,
+                        value: d.volume,
+                        color: d.close >= d.open ? '#26a69a50' : '#ef535050',
+                    }));
+                    volumeSeries.setData(volumeData);
+
+                    // 銘柄名更新
+                    document.getElementById('symbolInfo').textContent = `${symbol} ${timeframe}`;
+
+                    // 最新価格を表示
+                    const latest = data.data[data.data.length - 1];
+                    updatePriceInfo(latest);
+
+                    // チャートをフィット
+                    chart.timeScale().fitContent();
+                } else {
+                    alert('データが取得できませんでした。MT5が起動しているか確認してください。');
+                }
+            } catch (e) {
+                console.error('データ取得エラー:', e);
+                alert('エラーが発生しました: ' + e.message);
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('loadBtn').disabled = false;
+            }
+        }
+
+        // ============ Collector Functions ============
+
+        // コレクターの状態を更新
+        async function updateCollectorStatus() {
+            try {
+                const res = await fetch('/api/collector/status');
+                const status = await res.json();
+
+                const statusEl = document.getElementById('collectorStatus');
+                if (status.is_running) {
+                    statusEl.textContent = '実行中';
+                    statusEl.className = 'value status-running';
+                    document.getElementById('startBtn').disabled = true;
+                    document.getElementById('stopBtn').disabled = false;
+                } else {
+                    statusEl.textContent = '停止中';
+                    statusEl.className = 'value status-stopped';
+                    document.getElementById('startBtn').disabled = false;
+                    document.getElementById('stopBtn').disabled = true;
+                }
+
+                document.getElementById('screenshotCount').textContent = status.screenshots_count || 0;
+                document.getElementById('actionCount').textContent = status.actions_count || 0;
+
+                if (status.last_screenshot_at) {
+                    const time = new Date(status.last_screenshot_at);
+                    document.getElementById('lastUpdate').textContent = time.toLocaleTimeString('ja-JP');
+                }
+
+            } catch (e) {
+                console.error('Status update error:', e);
+            }
+        }
+
+        // 保留中のアクションを更新
+        async function updatePendingActions() {
+            try {
+                const res = await fetch('/api/collector/pending-actions');
+                const data = await res.json();
+                const container = document.getElementById('pendingActions');
+
+                if (data.pending_actions && data.pending_actions.length > 0) {
+                    container.innerHTML = data.pending_actions.map(action => `
+                        <div class="pending-action">
+                            <div class="action-type">${action.action} - 思考入力待ち</div>
+                            <div class="action-time">${new Date(action.timestamp).toLocaleString('ja-JP')}</div>
+                        </div>
+                    `).join('');
+
+                    // 自動でアクションタイプを選択
+                    document.getElementById('actionSelect').value = data.pending_actions[0].action;
+                } else {
+                    container.innerHTML = '<p style="color: #888; font-size: 0.85rem;">待機中のアクションはありません</p>';
+                }
+            } catch (e) {
+                console.error('Pending actions update error:', e);
+            }
+        }
+
+        // 最近のデータを更新
+        async function updateRecentData() {
+            try {
+                const res = await fetch('/api/collector/recent-data?limit=5');
+                const data = await res.json();
+                const container = document.getElementById('recentData');
+
+                if (data.data && data.data.length > 0) {
+                    container.innerHTML = data.data.reverse().map(item => `
+                        <div class="data-item">
+                            <span class="action-badge action-${item.action}">${item.action}</span>
+                            <span>${new Date(item.timestamp).toLocaleTimeString('ja-JP')}</span>
+                            ${item.thought ? `<div class="thought-preview">${item.thought}</div>` : ''}
+                        </div>
+                    `).join('');
+                } else {
+                    container.innerHTML = '<p style="color: #888; font-size: 0.85rem;">まだデータがありません</p>';
+                }
+            } catch (e) {
+                console.error('Recent data update error:', e);
+            }
+        }
+
+        // コレクター開始
+        async function startCollector() {
+            try {
+                const res = await fetch('/api/collector/start', { method: 'POST' });
+                const data = await res.json();
+                console.log('Collector started:', data);
+                await updateCollectorStatus();
+
+                // 定期的に状態を更新
+                statusInterval = setInterval(() => {
+                    updateCollectorStatus();
+                    updatePendingActions();
+                    updateRecentData();
+                }, 5000);
+
+            } catch (e) {
+                console.error('Start collector error:', e);
+                alert('コレクターの開始に失敗しました');
+            }
+        }
+
+        // コレクター停止
+        async function stopCollector() {
+            try {
+                const res = await fetch('/api/collector/stop', { method: 'POST' });
+                const data = await res.json();
+                console.log('Collector stopped:', data);
+                await updateCollectorStatus();
+
+                // 定期更新を停止
+                if (statusInterval) {
+                    clearInterval(statusInterval);
+                    statusInterval = null;
+                }
+
+            } catch (e) {
+                console.error('Stop collector error:', e);
+                alert('コレクターの停止に失敗しました');
+            }
+        }
+
+        // 思考を送信
+        async function submitThought() {
+            const thought = document.getElementById('thoughtInput').value.trim();
+            const action = document.getElementById('actionSelect').value;
+
+            if (!thought) {
+                alert('思考を入力してください');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/collector/thought', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ thought, action })
+                });
+                const data = await res.json();
+                console.log('Thought submitted:', data);
+
+                // 入力をクリア
+                document.getElementById('thoughtInput').value = '';
+
+                // 更新
+                await updatePendingActions();
+                await updateRecentData();
+
+            } catch (e) {
+                console.error('Submit thought error:', e);
+                alert('思考の送信に失敗しました');
+            }
+        }
+
+        // WebSocket接続
+        function connectWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            ws = new WebSocket(`${protocol}//${window.location.host}/ws/collector`);
+
+            ws.onopen = () => {
+                console.log('WebSocket connected');
+            };
+
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                console.log('WebSocket message:', data);
+
+                if (data.type === 'action_detected') {
+                    // アクション検出時の通知
+                    updatePendingActions();
+                    // 通知音を鳴らす（オプション）
+                    // new Audio('/notification.mp3').play();
+                } else if (data.type === 'thought_submitted') {
+                    updateRecentData();
+                }
+            };
+
+            ws.onclose = () => {
+                console.log('WebSocket disconnected, reconnecting...');
+                setTimeout(connectWebSocket, 3000);
+            };
+
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+            };
+        }
+
+        // 初期化
+        document.addEventListener('DOMContentLoaded', async () => {
+            initChart();
+            await loadSymbols();
+            await loadOHLC();
+
+            // コレクター状態の初期化
+            await updateCollectorStatus();
+            await updatePendingActions();
+            await updateRecentData();
+
+            // WebSocket接続
+            connectWebSocket();
+
+            // イベントリスナー
+            document.getElementById('loadBtn').addEventListener('click', loadOHLC);
+            document.getElementById('symbol').addEventListener('change', loadOHLC);
+            document.getElementById('timeframe').addEventListener('change', loadOHLC);
+
+            // Enterキーで思考を送信
+            document.getElementById('thoughtInput').addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && e.ctrlKey) {
+                    submitThought();
+                }
+            });
+        });
+    </script>
+</body>
+</html>

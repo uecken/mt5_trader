@@ -1,0 +1,22 @@
+# Existing dependencies
+MetaTrader5
+fastapi
+uvicorn[standard]
+pandas
+
+# Phase 1: Data Collection System
+mss>=9.0.0                   # Fast screen capture
+pillow>=10.0.0               # Image processing
+pywin32                      # Windows API for window detection
+
+# Technical Analysis
+ta>=0.10.2                   # Technical indicators library (RSI, MACD, MA, BB)
+
+# Configuration
+pydantic>=2.0
+pydantic-settings>=2.0
+pyyaml>=6.0
+python-dotenv>=1.0.0
+
+# Time zone management
+pytz>=2024.1

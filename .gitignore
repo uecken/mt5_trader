@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+*.egg-info/
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment
+.env
+.env.local
+
+# Data directories (large files)
+data/screenshots/
+data/training/
+data/actions/
+data/thoughts/
+
+# Keep directory structure
+!data/.gitkeep
+!data/screenshots/.gitkeep
+!data/training/.gitkeep
+!data/actions/.gitkeep
+!data/thoughts/.gitkeep
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db

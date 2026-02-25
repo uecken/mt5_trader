@@ -1,21 +1,23 @@
 """
 Collector service module.
 Main service that orchestrates screen capture, position monitoring, and data collection.
+Supports session-based data collection (BUY -> HOLD -> SELL/STOP_LOSS).
 """
 import asyncio
 import threading
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Callable
+from typing import Optional, Callable, Dict
 import logging
 import time
 
-from collector.screen_capture import ScreenCapture
+from collector.screen_capture import ScreenCapture, MultiTimeframeCapture
 from collector.market_data_collector import MarketDataCollector
 from collector.position_monitor import PositionMonitor
 from collector.thought_input import ThoughtManager
 from collector.data_linker import DataLinker
-from models.market_data import Action, PositionInfo, CollectorStatus, MarketState
+from collector.session_manager import SessionManager, get_session_manager
+from models.market_data import Action, PositionInfo, CollectorStatus, MarketState, TradingSession
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +36,7 @@ class CollectorService:
         actions_dir: Path = Path("data/actions"),
         thoughts_dir: Path = Path("data/thoughts"),
         training_dir: Path = Path("data/training"),
+        sessions_dir: Path = Path("data/sessions"),
         mt5_window_title: str = "MetaTrader 5",
         on_action_callback: Optional[Callable[[Action, Optional[PositionInfo]], None]] = None
     ):
@@ -47,6 +50,7 @@ class CollectorService:
             actions_dir: Directory to save action logs
             thoughts_dir: Directory to save thoughts
             training_dir: Directory for training data
+            sessions_dir: Directory for session data
             mt5_window_title: Title of MT5 window
             on_action_callback: External callback for action notifications
         """
@@ -55,6 +59,12 @@ class CollectorService:
 
         # Initialize components
         self.screen_capture = ScreenCapture(
+            output_dir=screenshots_dir,
+            window_title=mt5_window_title
+        )
+
+        # Multi-timeframe capture for session-based collection
+        self.mtf_capture = MultiTimeframeCapture(
             output_dir=screenshots_dir,
             window_title=mt5_window_title
         )
@@ -71,6 +81,12 @@ class CollectorService:
             actions_dir=actions_dir
         )
 
+        # Session manager for BUY -> HOLD -> SELL/STOP_LOSS flow
+        self.session_manager = SessionManager(
+            sessions_dir=sessions_dir,
+            symbol=symbol
+        )
+
         self.position_monitor = PositionMonitor(
             symbol=symbol,
             poll_interval=1.0,
@@ -85,6 +101,7 @@ class CollectorService:
         self._status = CollectorStatus()
         self._last_screenshot_path: Optional[str] = None
         self._last_market_state: Optional[MarketState] = None
+        self._last_position_info: Optional[PositionInfo] = None
 
     def _on_action_detected(self, action: Action, position_info: Optional[PositionInfo]):
         """Handle detected trading action."""
@@ -256,6 +273,160 @@ class CollectorService:
     def is_running(self) -> bool:
         """Check if service is running."""
         return self._running
+
+    # ===== Session-based Collection Methods =====
+
+    def _capture_all_timeframes(self) -> Dict[str, str]:
+        """Capture screenshots for all timeframes."""
+        return self.mtf_capture.capture_all_timeframes()
+
+    def _get_current_market_state(self) -> Optional[MarketState]:
+        """Get current market state."""
+        return self.market_data_collector.collect_all_timeframes()
+
+    def _get_current_price(self) -> float:
+        """Get current price from position or market data."""
+        if self._last_position_info:
+            return self._last_position_info.price
+        if self._last_market_state and "M1" in self._last_market_state.timeframes:
+            ohlc = self._last_market_state.timeframes["M1"].ohlc
+            if ohlc:
+                return ohlc[-1].close
+        return 0.0
+
+    def start_session(self, thought: str) -> Optional[str]:
+        """
+        Start a new trading session (BUY entry).
+
+        Args:
+            thought: Trader's reasoning for the entry
+
+        Returns:
+            Session ID or None if failed
+        """
+        logger.info("Starting new trading session...")
+
+        # Capture all timeframes
+        screenshots = self._capture_all_timeframes()
+
+        # Get market state
+        market_state = self._get_current_market_state()
+        self._last_market_state = market_state
+
+        # Get current price
+        price = self._get_current_price()
+
+        # Start session
+        session_id = self.session_manager.start_session(
+            thought=thought,
+            price=price,
+            market_state=market_state,
+            screenshots=screenshots,
+            position_info=self._last_position_info
+        )
+
+        if session_id:
+            self._status.actions_count += 1
+            self._status.last_action_at = datetime.now()
+            logger.info(f"Session started: {session_id}")
+
+        return session_id
+
+    def add_hold(self, thought: str) -> bool:
+        """
+        Add a HOLD action to the current session.
+
+        Args:
+            thought: Trader's reasoning for holding
+
+        Returns:
+            True if successful
+        """
+        if not self.session_manager.has_active_session():
+            logger.warning("No active session. Cannot add HOLD.")
+            return False
+
+        logger.info("Adding HOLD to session...")
+
+        # Capture all timeframes
+        screenshots = self._capture_all_timeframes()
+
+        # Get market state
+        market_state = self._get_current_market_state()
+        self._last_market_state = market_state
+
+        # Add hold
+        success = self.session_manager.add_hold(
+            thought=thought,
+            market_state=market_state,
+            screenshots=screenshots
+        )
+
+        if success:
+            self._status.actions_count += 1
+            self._status.last_action_at = datetime.now()
+
+        return success
+
+    def end_session(self, action: Action, thought: str) -> Optional[TradingSession]:
+        """
+        End the current session (SELL or STOP_LOSS).
+
+        Args:
+            action: Exit action (SELL or STOP_LOSS)
+            thought: Trader's reasoning for the exit
+
+        Returns:
+            Completed session or None
+        """
+        if not self.session_manager.has_active_session():
+            logger.warning("No active session to end.")
+            return None
+
+        logger.info(f"Ending session with {action.value}...")
+
+        # Capture all timeframes
+        screenshots = self._capture_all_timeframes()
+
+        # Get market state
+        market_state = self._get_current_market_state()
+        self._last_market_state = market_state
+
+        # Get current price
+        price = self._get_current_price()
+
+        # End session
+        completed_session = self.session_manager.end_session(
+            action=action,
+            thought=thought,
+            price=price,
+            market_state=market_state,
+            screenshots=screenshots,
+            position_info=self._last_position_info
+        )
+
+        if completed_session:
+            self._status.actions_count += 1
+            self._status.last_action_at = datetime.now()
+            logger.info(f"Session ended: {completed_session.session_id}")
+
+        return completed_session
+
+    def get_active_session(self) -> Optional[TradingSession]:
+        """Get the current active session."""
+        return self.session_manager.get_active_session()
+
+    def has_active_session(self) -> bool:
+        """Check if there is an active session."""
+        return self.session_manager.has_active_session()
+
+    def list_sessions(self, limit: int = 10):
+        """List recent sessions."""
+        return self.session_manager.list_sessions(limit)
+
+    def get_session(self, session_id: str) -> Optional[TradingSession]:
+        """Get a session by ID."""
+        return self.session_manager.get_session(session_id)
 
 
 # Global service instance

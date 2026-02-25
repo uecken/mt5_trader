@@ -83,7 +83,16 @@ data/
 ├── screenshots/     # スクリーンショット画像
 ├── training/        # 学習用統合データ（JSON）
 ├── actions/         # アクションログ
-└── thoughts/        # 思考入力ログ
+├── thoughts/        # 思考入力ログ
+└── sessions/        # セッションデータ（BUY→SELL/STOP_LOSSの1サイクル）
+    └── session_YYYYMMDD_HHMMSS/
+        ├── session.json           # セッション概要
+        └── snapshots/             # 各スナップショット
+            └── YYYYMMDD_HHMMSS_ACTION/
+                ├── thought.json
+                ├── market_data.json
+                └── screenshots/
+                    ├── D1.png, H4.png, M15.png, M5.png, M1.png
 ```
 
 ### 統合データ形式（JSON）
@@ -180,6 +189,16 @@ data/
 | GET | `/api/collector/statistics` | 統計情報 |
 | GET | `/api/collector/recent-data` | 最近の収集データ |
 
+### セッション管理
+| Method | Endpoint | 説明 |
+|--------|----------|------|
+| GET | `/api/sessions` | セッション一覧 |
+| GET | `/api/sessions/active` | アクティブセッション取得 |
+| GET | `/api/sessions/{session_id}` | セッション詳細 |
+| POST | `/api/sessions/start` | セッション開始（BUY） |
+| POST | `/api/sessions/hold` | HOLD追加 |
+| POST | `/api/sessions/end` | セッション終了（SELL/STOP_LOSS） |
+
 ### WebSocket
 | Endpoint | 説明 |
 |----------|------|
@@ -199,11 +218,12 @@ MT5/
 │   └── settings.py             # 設定管理
 │
 ├── collector/                  # データ収集モジュール
-│   ├── screen_capture.py       # スクリーンショット取得
+│   ├── screen_capture.py       # スクリーンショット取得（マルチタイムフレーム対応）
 │   ├── market_data_collector.py # マルチタイムフレームOHLC
 │   ├── position_monitor.py     # ポジション監視
 │   ├── thought_input.py        # 思考入力管理
 │   ├── data_linker.py          # データ紐付け
+│   ├── session_manager.py      # セッション管理
 │   └── collector_service.py    # 収集サービス統合
 │
 ├── models/
@@ -213,13 +233,15 @@ MT5/
 │   ├── screenshots/
 │   ├── training/
 │   ├── actions/
-│   └── thoughts/
+│   ├── thoughts/
+│   └── sessions/               # セッションデータ
 │
 ├── templates/
 │   └── index.html              # Webフロントエンド
 │
 └── docs/
-    └── system_overview.md      # このドキュメント
+    ├── system_overview.md      # このドキュメント
+    └── session_management_plan.md # セッション管理実装計画
 ```
 
 ---
@@ -258,6 +280,14 @@ python app.py
 ---
 
 ## 将来の拡張計画
+
+### Phase 1.5: セッション管理機能（実装完了）
+→ 詳細: [session_management_plan.md](./session_management_plan.md)
+
+- BUY → HOLD → SELL/STOP_LOSS を1セッションとして管理
+- 各時間足（D1, H4, M15, M5, M1）のスクリーンショット
+- HOLDも思考付きで記録
+- E2E模倣学習用データ収集
 
 ### Phase 2: E2E模倣学習
 - PyTorch Dataset/DataLoader

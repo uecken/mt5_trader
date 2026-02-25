@@ -93,12 +93,35 @@
         #chart-container {
             flex: 1;
             padding: 10px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: 1fr 1fr;
+            gap: 5px;
         }
-        #chart {
-            width: 100%;
-            height: 100%;
+        .chart-wrapper {
+            position: relative;
+            background: #1a1a2e;
             border-radius: 8px;
             overflow: hidden;
+        }
+        .chart-wrapper .chart {
+            width: 100%;
+            height: 100%;
+        }
+        .chart-label {
+            position: absolute;
+            top: 5px;
+            left: 10px;
+            background: rgba(22, 33, 62, 0.9);
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-size: 0.75rem;
+            color: #4cc9f0;
+            z-index: 10;
+            font-weight: bold;
+        }
+        .chart-wrapper.active {
+            outline: 2px solid #4cc9f0;
         }
         .info-bar {
             position: absolute;
@@ -260,6 +283,89 @@
             text-overflow: ellipsis;
             white-space: nowrap;
         }
+
+        /* Drawing Tools */
+        .drawing-toolbar {
+            position: absolute;
+            top: 90px;
+            right: 370px;
+            background: rgba(22, 33, 62, 0.95);
+            padding: 8px;
+            border-radius: 4px;
+            z-index: 100;
+            display: flex;
+            gap: 5px;
+            flex-direction: column;
+        }
+        .drawing-toolbar button {
+            width: 40px;
+            height: 40px;
+            padding: 5px;
+            font-size: 1.2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .drawing-toolbar button.active {
+            background: #7b2cbf;
+            color: #fff;
+        }
+        .drawing-toolbar button:hover {
+            background: #4cc9f0;
+        }
+        .color-picker-container {
+            display: flex;
+            gap: 3px;
+            flex-wrap: wrap;
+            max-width: 90px;
+        }
+        .color-btn {
+            width: 20px !important;
+            height: 20px !important;
+            min-width: 20px;
+            padding: 0 !important;
+            border-radius: 3px !important;
+        }
+        .color-btn.selected {
+            outline: 2px solid #fff;
+        }
+        .drawing-info {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(22, 33, 62, 0.9);
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            color: #888;
+            z-index: 100;
+        }
+        .lines-list {
+            max-height: 150px;
+            overflow-y: auto;
+            margin-top: 8px;
+        }
+        .line-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 4px 8px;
+            background: #0f3460;
+            border-radius: 3px;
+            margin-bottom: 4px;
+            font-size: 0.8rem;
+        }
+        .line-item .line-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 2px;
+            margin-right: 8px;
+        }
+        .line-item .delete-line {
+            background: #ef5350;
+            padding: 2px 6px;
+            font-size: 0.7rem;
+        }
     </style>
 </head>
 <body>
@@ -273,24 +379,11 @@
                 </select>
             </div>
             <div class="control-group">
-                <label>時間足:</label>
-                <select id="timeframe">
-                    <option value="M1">1分</option>
-                    <option value="M5">5分</option>
-                    <option value="M15">15分</option>
-                    <option value="M30">30分</option>
-                    <option value="H1" selected>1時間</option>
-                    <option value="H4">4時間</option>
-                    <option value="D1">日足</option>
-                    <option value="W1">週足</option>
-                    <option value="MN1">月足</option>
-                </select>
-            </div>
-            <div class="control-group">
                 <label>本数:</label>
-                <input type="number" id="count" value="200" min="10" max="1000" style="width: 80px;">
+                <input type="number" id="count" value="100" min="10" max="500" style="width: 80px;">
             </div>
             <button id="loadBtn">更新</button>
+            <span style="color: #888; font-size: 0.8rem; margin-left: 10px;">表示: H4 / M15 / M5 / M1</span>
         </div>
     </div>
 
@@ -300,11 +393,70 @@
             <span id="priceInfo" class="price">---</span>
         </div>
 
+        <!-- Drawing Toolbar -->
+        <div class="drawing-toolbar">
+            <button id="drawHLine" title="水平線 (H)">―</button>
+            <button id="drawTrendLine" title="トレンドライン (T)">╱</button>
+            <button id="drawPointer" title="選択モード (Esc)" class="active">↖</button>
+            <hr style="border-color: #2B2B43; margin: 5px 0;">
+            <div class="color-picker-container">
+                <button class="color-btn selected" style="background: #ef5350;" data-color="#ef5350"></button>
+                <button class="color-btn" style="background: #26a69a;" data-color="#26a69a"></button>
+                <button class="color-btn" style="background: #4cc9f0;" data-color="#4cc9f0"></button>
+                <button class="color-btn" style="background: #ffeb3b;" data-color="#ffeb3b"></button>
+                <button class="color-btn" style="background: #ff9800;" data-color="#ff9800"></button>
+                <button class="color-btn" style="background: #ffffff;" data-color="#ffffff"></button>
+            </div>
+            <hr style="border-color: #2B2B43; margin: 5px 0;">
+            <button id="deleteAllLines" title="全削除">🗑</button>
+        </div>
+
+        <div class="drawing-info" id="drawingInfo" style="display: none;">
+            <span id="drawingMode">水平線モード: クリックして配置</span>
+        </div>
+
         <div id="chart-container">
-            <div id="chart"></div>
+            <div class="chart-wrapper active" data-timeframe="H4">
+                <div class="chart-label">4時間足 (H4)</div>
+                <div class="chart" id="chart-H4"></div>
+            </div>
+            <div class="chart-wrapper" data-timeframe="M15">
+                <div class="chart-label">15分足 (M15)</div>
+                <div class="chart" id="chart-M15"></div>
+            </div>
+            <div class="chart-wrapper" data-timeframe="M5">
+                <div class="chart-label">5分足 (M5)</div>
+                <div class="chart" id="chart-M5"></div>
+            </div>
+            <div class="chart-wrapper" data-timeframe="M1">
+                <div class="chart-label">1分足 (M1)</div>
+                <div class="chart" id="chart-M1"></div>
+            </div>
         </div>
 
         <div class="collector-panel">
+            <!-- Session Section -->
+            <div class="panel-section">
+                <h3>セッション管理</h3>
+                <div class="status-grid">
+                    <div class="status-item" style="grid-column: span 2;">
+                        <div class="label">セッション状態</div>
+                        <div class="value" id="sessionStatus">なし</div>
+                    </div>
+                </div>
+                <div class="session-thought-input" style="margin-top: 10px;">
+                    <textarea id="sessionThoughtInput" placeholder="この判断の理由を入力...&#10;例: 15分足でダブルボトム確認、1分足でリテスト発生" style="background: #0f3460; border: 1px solid #4cc9f0; color: #fff; padding: 10px; border-radius: 4px; font-size: 0.9rem; resize: vertical; width: 100%; min-height: 80px; box-sizing: border-box;"></textarea>
+                </div>
+                <div class="session-controls" style="display: flex; flex-direction: column; gap: 8px; margin-top: 10px;">
+                    <button class="btn-start" id="sessionStartBtn" onclick="startSession()" style="width: 100%;">BUY エントリー開始</button>
+                    <button id="sessionHoldBtn" onclick="addSessionHold()" disabled style="width: 100%; background: #555;">HOLD 記録</button>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="btn-stop" id="sessionSellBtn" onclick="endSession('SELL')" disabled style="flex: 1;">SELL 決済</button>
+                        <button style="flex: 1; background: #ff9800;" id="sessionStopLossBtn" onclick="endSession('STOP_LOSS')" disabled>STOP_LOSS</button>
+                    </div>
+                </div>
+            </div>
+
             <!-- Status Section -->
             <div class="panel-section">
                 <h3>データ収集</h3>
@@ -363,87 +515,158 @@
     <div class="loading" id="loading" style="display: none;">読み込み中...</div>
 
     <script>
-        let chart = null;
-        let candleSeries = null;
-        let volumeSeries = null;
+        // Multi-chart state
+        const TIMEFRAMES = ['H4', 'M15', 'M5', 'M1'];
+        let charts = {}; // { H4: { chart, candleSeries, volumeSeries, canvas, ctx, drawnLines, trendLines } }
+        let activeTimeframe = 'H4';
         let ws = null;
         let statusInterval = null;
 
-        // チャート初期化
+        // Drawing state
+        let drawingMode = 'pointer'; // 'pointer', 'hline', 'trendline'
+        let selectedColor = '#ef5350';
+        let trendLineStart = null;
+        let lineIdCounter = 0;
+
+        // チャート初期化（複数チャート対応）
         function initChart() {
-            const container = document.getElementById('chart');
+            TIMEFRAMES.forEach(tf => {
+                const container = document.getElementById(`chart-${tf}`);
+                const wrapper = container.parentElement;
 
-            chart = LightweightCharts.createChart(container, {
-                layout: {
-                    background: { type: 'solid', color: '#1a1a2e' },
-                    textColor: '#d1d4dc',
-                },
-                grid: {
-                    vertLines: { color: '#2B2B43' },
-                    horzLines: { color: '#2B2B43' },
-                },
-                crosshair: {
-                    mode: LightweightCharts.CrosshairMode.Normal,
-                },
-                rightPriceScale: {
-                    borderColor: '#2B2B43',
-                },
-                timeScale: {
-                    borderColor: '#2B2B43',
-                    timeVisible: true,
-                    secondsVisible: false,
-                },
-            });
+                const chart = LightweightCharts.createChart(container, {
+                    layout: {
+                        background: { type: 'solid', color: '#1a1a2e' },
+                        textColor: '#d1d4dc',
+                    },
+                    grid: {
+                        vertLines: { color: '#2B2B43' },
+                        horzLines: { color: '#2B2B43' },
+                    },
+                    crosshair: {
+                        mode: LightweightCharts.CrosshairMode.Normal,
+                    },
+                    rightPriceScale: {
+                        borderColor: '#2B2B43',
+                    },
+                    timeScale: {
+                        borderColor: '#2B2B43',
+                        timeVisible: true,
+                        secondsVisible: false,
+                    },
+                });
 
-            // ローソク足シリーズ
-            candleSeries = chart.addCandlestickSeries({
-                upColor: '#26a69a',
-                downColor: '#ef5350',
-                borderDownColor: '#ef5350',
-                borderUpColor: '#26a69a',
-                wickDownColor: '#ef5350',
-                wickUpColor: '#26a69a',
-            });
+                // ローソク足シリーズ
+                const candleSeries = chart.addCandlestickSeries({
+                    upColor: '#26a69a',
+                    downColor: '#ef5350',
+                    borderDownColor: '#ef5350',
+                    borderUpColor: '#26a69a',
+                    wickDownColor: '#ef5350',
+                    wickUpColor: '#26a69a',
+                });
 
-            // 出来高シリーズ
-            volumeSeries = chart.addHistogramSeries({
-                color: '#4cc9f0',
-                priceFormat: {
-                    type: 'volume',
-                },
-                priceScaleId: '',
-                scaleMargins: {
-                    top: 0.8,
-                    bottom: 0,
-                },
-            });
+                // 出来高シリーズ
+                const volumeSeries = chart.addHistogramSeries({
+                    color: '#4cc9f0',
+                    priceFormat: {
+                        type: 'volume',
+                    },
+                    priceScaleId: '',
+                    scaleMargins: {
+                        top: 0.85,
+                        bottom: 0,
+                    },
+                });
 
-            // クロスヘア移動時の情報更新
-            chart.subscribeCrosshairMove((param) => {
-                if (param.time && param.seriesData.get(candleSeries)) {
-                    const data = param.seriesData.get(candleSeries);
-                    updatePriceInfo(data);
-                }
+                // クロスヘア移動時の情報更新
+                chart.subscribeCrosshairMove((param) => {
+                    if (param.time && param.seriesData.get(candleSeries)) {
+                        const data = param.seriesData.get(candleSeries);
+                        updatePriceInfo(data, tf);
+                    }
+                });
+
+                // トレンドライン用キャンバス
+                const canvas = document.createElement('canvas');
+                canvas.className = 'trendline-canvas';
+                canvas.style.cssText = `
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    pointer-events: none;
+                    z-index: 5;
+                `;
+                wrapper.appendChild(canvas);
+                const ctx = canvas.getContext('2d');
+
+                // チャート情報を保存
+                charts[tf] = {
+                    chart,
+                    candleSeries,
+                    volumeSeries,
+                    canvas,
+                    ctx,
+                    drawnLines: [],
+                    trendLines: [],
+                    container,
+                    wrapper
+                };
+
+                // クリックでアクティブチャート切り替え
+                wrapper.addEventListener('click', () => {
+                    setActiveChart(tf);
+                });
+
+                // チャートクリックイベント（描画用）
+                chart.subscribeClick((param) => {
+                    if (activeTimeframe !== tf) {
+                        setActiveChart(tf);
+                        return;
+                    }
+                    handleChartClick(tf, param);
+                });
+
+                // スクロール/ズーム時に再描画
+                chart.timeScale().subscribeVisibleTimeRangeChange(() => {
+                    drawAllTrendLines(tf);
+                });
             });
 
             // リサイズ対応
             window.addEventListener('resize', () => {
-                chart.applyOptions({
-                    width: container.clientWidth,
-                    height: container.clientHeight,
+                TIMEFRAMES.forEach(tf => {
+                    const { chart, container, canvas } = charts[tf];
+                    chart.applyOptions({
+                        width: container.clientWidth,
+                        height: container.clientHeight,
+                    });
+                    canvas.width = container.clientWidth;
+                    canvas.height = container.clientHeight;
+                    drawAllTrendLines(tf);
                 });
             });
         }
 
+        // アクティブチャート切り替え
+        function setActiveChart(tf) {
+            activeTimeframe = tf;
+            document.querySelectorAll('.chart-wrapper').forEach(w => {
+                w.classList.remove('active');
+            });
+            charts[tf].wrapper.classList.add('active');
+        }
+
         // 価格情報更新
-        function updatePriceInfo(data) {
+        function updatePriceInfo(data, tf = null) {
             const priceInfo = document.getElementById('priceInfo');
             const change = data.close - data.open;
             const changeClass = change >= 0 ? 'up' : 'down';
             const sign = change >= 0 ? '+' : '';
+            const tfLabel = tf ? `[${tf}] ` : '';
 
             priceInfo.innerHTML = `
-                O: ${data.open.toFixed(2)}
+                ${tfLabel}O: ${data.open.toFixed(2)}
                 H: ${data.high.toFixed(2)}
                 L: ${data.low.toFixed(2)}
                 C: <span class="${changeClass}">${data.close.toFixed(2)} (${sign}${change.toFixed(2)})</span>
@@ -469,41 +692,72 @@
             }
         }
 
-        // OHLCデータを取得してチャート更新
+        // OHLCデータを取得してチャート更新（全4チャート）
         async function loadOHLC() {
             const symbol = document.getElementById('symbol').value;
-            const timeframe = document.getElementById('timeframe').value;
             const count = document.getElementById('count').value;
 
             document.getElementById('loading').style.display = 'block';
             document.getElementById('loadBtn').disabled = true;
 
             try {
-                const res = await fetch(`/api/ohlc?symbol=${symbol}&timeframe=${timeframe}&count=${count}`);
-                const data = await res.json();
+                // 全4時間足のデータを並列取得
+                const promises = TIMEFRAMES.map(tf =>
+                    fetch(`/api/ohlc?symbol=${symbol}&timeframe=${tf}&count=${count}`)
+                        .then(res => res.json())
+                        .then(data => ({ tf, data }))
+                );
 
-                if (data.data && data.data.length > 0) {
-                    // ローソク足データをセット
-                    candleSeries.setData(data.data);
+                const results = await Promise.all(promises);
+                let hasData = false;
 
-                    // 出来高データをセット
-                    const volumeData = data.data.map(d => ({
-                        time: d.time,
-                        value: d.volume,
-                        color: d.close >= d.open ? '#26a69a50' : '#ef535050',
-                    }));
-                    volumeSeries.setData(volumeData);
+                results.forEach(({ tf, data }) => {
+                    if (data.data && data.data.length > 0) {
+                        hasData = true;
+                        const chartObj = charts[tf];
 
-                    // 銘柄名更新
-                    document.getElementById('symbolInfo').textContent = `${symbol} ${timeframe}`;
+                        // 既存の線をクリア
+                        chartObj.drawnLines.forEach(line => {
+                            try { chartObj.candleSeries.removePriceLine(line.lineObj); } catch(e) {}
+                        });
+                        chartObj.drawnLines = [];
+                        chartObj.trendLines = [];
 
-                    // 最新価格を表示
-                    const latest = data.data[data.data.length - 1];
-                    updatePriceInfo(latest);
+                        // ローソク足データをセット
+                        chartObj.candleSeries.setData(data.data);
 
-                    // チャートをフィット
-                    chart.timeScale().fitContent();
-                } else {
+                        // 出来高データをセット
+                        const volumeData = data.data.map(d => ({
+                            time: d.time,
+                            value: d.volume,
+                            color: d.close >= d.open ? '#26a69a50' : '#ef535050',
+                        }));
+                        chartObj.volumeSeries.setData(volumeData);
+
+                        // チャートをフィット
+                        chartObj.chart.timeScale().fitContent();
+
+                        // キャンバスサイズ調整
+                        chartObj.canvas.width = chartObj.container.clientWidth;
+                        chartObj.canvas.height = chartObj.container.clientHeight;
+                    }
+                });
+
+                if (hasData) {
+                    // 共有水平線を読み込み（全チャートに適用）
+                    loadSharedLinesFromStorage();
+
+                    // 各チャートのトレンドラインを読み込み
+                    TIMEFRAMES.forEach(tf => {
+                        loadLinesFromStorage(tf);
+                        setTimeout(() => drawAllTrendLines(tf), 100);
+                    });
+                }
+
+                // 銘柄名更新
+                document.getElementById('symbolInfo').textContent = symbol;
+
+                if (!hasData) {
                     alert('データが取得できませんでした。MT5が起動しているか確認してください。');
                 }
             } catch (e) {
@@ -512,6 +766,120 @@
             } finally {
                 document.getElementById('loading').style.display = 'none';
                 document.getElementById('loadBtn').disabled = false;
+            }
+        }
+
+        // ============ Session Functions ============
+
+        // セッション状態を更新
+        async function updateSessionStatus() {
+            try {
+                const res = await fetch('/api/sessions/active');
+                const data = await res.json();
+
+                const statusEl = document.getElementById('sessionStatus');
+                const startBtn = document.getElementById('sessionStartBtn');
+                const holdBtn = document.getElementById('sessionHoldBtn');
+                const sellBtn = document.getElementById('sessionSellBtn');
+                const stopLossBtn = document.getElementById('sessionStopLossBtn');
+
+                if (data.session) {
+                    statusEl.textContent = `${data.session.session_id} (${data.session.status})`;
+                    statusEl.className = 'value status-running';
+                    startBtn.disabled = true;
+                    holdBtn.disabled = false;
+                    holdBtn.style.background = '#4cc9f0';
+                    sellBtn.disabled = false;
+                    stopLossBtn.disabled = false;
+                } else {
+                    statusEl.textContent = 'なし';
+                    statusEl.className = 'value';
+                    startBtn.disabled = false;
+                    holdBtn.disabled = true;
+                    holdBtn.style.background = '#555';
+                    sellBtn.disabled = true;
+                    stopLossBtn.disabled = true;
+                }
+            } catch (e) {
+                console.error('Session status update error:', e);
+            }
+        }
+
+        // セッション開始（BUY）
+        async function startSession() {
+            const thought = document.getElementById('sessionThoughtInput').value.trim();
+            if (!thought) {
+                alert('思考を入力してください');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/sessions/start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ thought })
+                });
+                const data = await res.json();
+                console.log('Session started:', data);
+
+                document.getElementById('sessionThoughtInput').value = '';
+                await updateSessionStatus();
+                await updateRecentData();
+            } catch (e) {
+                console.error('Start session error:', e);
+                alert('セッションの開始に失敗しました');
+            }
+        }
+
+        // HOLD追加
+        async function addSessionHold() {
+            const thought = document.getElementById('sessionThoughtInput').value.trim();
+            if (!thought) {
+                alert('思考を入力してください');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/sessions/hold', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ thought })
+                });
+                const data = await res.json();
+                console.log('HOLD added:', data);
+
+                document.getElementById('sessionThoughtInput').value = '';
+                await updateSessionStatus();
+                await updateRecentData();
+            } catch (e) {
+                console.error('Add hold error:', e);
+                alert('HOLDの追加に失敗しました');
+            }
+        }
+
+        // セッション終了（SELL/STOP_LOSS）
+        async function endSession(action) {
+            const thought = document.getElementById('sessionThoughtInput').value.trim();
+            if (!thought) {
+                alert('思考を入力してください');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/sessions/end', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action, thought })
+                });
+                const data = await res.json();
+                console.log('Session ended:', data);
+
+                document.getElementById('sessionThoughtInput').value = '';
+                await updateSessionStatus();
+                await updateRecentData();
+            } catch (e) {
+                console.error('End session error:', e);
+                alert('セッションの終了に失敗しました');
             }
         }
 
@@ -703,6 +1071,314 @@
             };
         }
 
+        // ============ Drawing Functions ============
+
+        // 座標変換
+        function priceToY(tf, price) {
+            const coordinate = charts[tf].candleSeries.priceToCoordinate(price);
+            return coordinate;
+        }
+
+        function timeToX(tf, time) {
+            const coordinate = charts[tf].chart.timeScale().timeToCoordinate(time);
+            return coordinate;
+        }
+
+        // 全トレンドライン再描画
+        function drawAllTrendLines(tf) {
+            const chartObj = charts[tf];
+            if (!chartObj || !chartObj.ctx) return;
+
+            const ctx = chartObj.ctx;
+            const canvas = chartObj.canvas;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            chartObj.trendLines.forEach(line => {
+                if (line.points.length === 2) {
+                    const x1 = timeToX(tf, line.points[0].time);
+                    const y1 = priceToY(tf, line.points[0].price);
+                    const x2 = timeToX(tf, line.points[1].time);
+                    const y2 = priceToY(tf, line.points[1].price);
+
+                    if (x1 !== null && y1 !== null && x2 !== null && y2 !== null) {
+                        // 線を延長して描画
+                        const dx = x2 - x1;
+                        const dy = y2 - y1;
+                        const extendFactor = 10;
+
+                        ctx.beginPath();
+                        ctx.strokeStyle = line.color;
+                        ctx.lineWidth = 2;
+                        ctx.moveTo(x1 - dx * extendFactor, y1 - dy * extendFactor);
+                        ctx.lineTo(x2 + dx * extendFactor, y2 + dy * extendFactor);
+                        ctx.stroke();
+
+                        // 始点・終点マーカー
+                        ctx.fillStyle = line.color;
+                        ctx.beginPath();
+                        ctx.arc(x1, y1, 4, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.beginPath();
+                        ctx.arc(x2, y2, 4, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                }
+            });
+
+            // 描画中のトレンドライン（アクティブチャートのみ）
+            if (tf === activeTimeframe && trendLineStart && drawingMode === 'trendline') {
+                const x1 = timeToX(tf, trendLineStart.time);
+                const y1 = priceToY(tf, trendLineStart.price);
+                if (x1 !== null && y1 !== null) {
+                    ctx.fillStyle = selectedColor;
+                    ctx.beginPath();
+                    ctx.arc(x1, y1, 5, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+        }
+
+        // チャートクリックハンドラ
+        function handleChartClick(tf, param) {
+            if (drawingMode === 'pointer') return;
+
+            const chartObj = charts[tf];
+            const price = chartObj.candleSeries.coordinateToPrice(param.point.y);
+            const time = chartObj.chart.timeScale().coordinateToTime(param.point.x);
+
+            if (price === null || time === null) return;
+
+            if (drawingMode === 'hline') {
+                addHorizontalLine(tf, price);
+            } else if (drawingMode === 'trendline') {
+                if (!trendLineStart) {
+                    trendLineStart = { time, price };
+                    document.getElementById('drawingMode').textContent = 'トレンドライン: 2点目をクリック';
+                    drawAllTrendLines(tf);
+                } else {
+                    addTrendLine(tf, trendLineStart, { time, price });
+                    trendLineStart = null;
+                    document.getElementById('drawingMode').textContent = 'トレンドライン: 2点をクリック';
+                }
+            }
+        }
+
+        // 描画モード設定
+        function setDrawingMode(mode) {
+            drawingMode = mode;
+            document.querySelectorAll('.drawing-toolbar button:not(.color-btn)').forEach(btn => {
+                btn.classList.remove('active');
+            });
+
+            const infoEl = document.getElementById('drawingInfo');
+            const modeEl = document.getElementById('drawingMode');
+
+            switch (mode) {
+                case 'hline':
+                    document.getElementById('drawHLine').classList.add('active');
+                    infoEl.style.display = 'block';
+                    modeEl.textContent = '水平線モード: クリックして配置';
+                    break;
+                case 'trendline':
+                    document.getElementById('drawTrendLine').classList.add('active');
+                    infoEl.style.display = 'block';
+                    modeEl.textContent = 'トレンドライン: 2点をクリック';
+                    trendLineStart = null;
+                    break;
+                default:
+                    document.getElementById('drawPointer').classList.add('active');
+                    infoEl.style.display = 'none';
+                    trendLineStart = null;
+                    TIMEFRAMES.forEach(tf => drawAllTrendLines(tf));
+            }
+        }
+
+        // 水平線追加（全チャート共有）
+        function addHorizontalLine(tf, price) {
+            const id = ++lineIdCounter;
+
+            // 全チャートに水平線を追加
+            TIMEFRAMES.forEach(timeframe => {
+                const chartObj = charts[timeframe];
+                const lineObj = chartObj.candleSeries.createPriceLine({
+                    price: price,
+                    color: selectedColor,
+                    lineWidth: 2,
+                    lineStyle: LightweightCharts.LineStyle.Solid,
+                    axisLabelVisible: true,
+                    title: '',
+                });
+
+                chartObj.drawnLines.push({
+                    id: id,  // 同じIDで共有
+                    type: 'hline',
+                    price: price,
+                    color: selectedColor,
+                    lineObj: lineObj
+                });
+            });
+
+            saveSharedLinesToStorage();
+        }
+
+        // トレンドライン追加
+        function addTrendLine(tf, point1, point2) {
+            const chartObj = charts[tf];
+            const id = ++lineIdCounter;
+            chartObj.trendLines.push({
+                id: id,
+                points: [point1, point2],
+                color: selectedColor
+            });
+
+            drawAllTrendLines(tf);
+            saveLinesToStorage(tf);
+        }
+
+        // 線を削除（水平線は全チャートから、トレンドラインはアクティブチャートから）
+        function deleteLastLine() {
+            const chartObj = charts[activeTimeframe];
+
+            // まずトレンドラインをチェック（アクティブチャートのみ）
+            if (chartObj.trendLines.length > 0) {
+                chartObj.trendLines.pop();
+                drawAllTrendLines(activeTimeframe);
+                saveLinesToStorage(activeTimeframe);
+                return;
+            }
+
+            // 水平線を削除（全チャートから）
+            if (chartObj.drawnLines.length > 0) {
+                const last = chartObj.drawnLines[chartObj.drawnLines.length - 1];
+                const lineId = last.id;
+
+                // 全チャートから同じIDの水平線を削除
+                TIMEFRAMES.forEach(tf => {
+                    const obj = charts[tf];
+                    const index = obj.drawnLines.findIndex(l => l.id === lineId);
+                    if (index !== -1) {
+                        obj.candleSeries.removePriceLine(obj.drawnLines[index].lineObj);
+                        obj.drawnLines.splice(index, 1);
+                    }
+                });
+                saveSharedLinesToStorage();
+            }
+        }
+
+        // 全削除
+        function deleteAllLines() {
+            // 水平線を全チャートから削除
+            TIMEFRAMES.forEach(tf => {
+                const chartObj = charts[tf];
+                chartObj.drawnLines.forEach(line => {
+                    chartObj.candleSeries.removePriceLine(line.lineObj);
+                });
+                chartObj.drawnLines = [];
+            });
+
+            // トレンドラインはアクティブチャートのみ削除
+            const activeChart = charts[activeTimeframe];
+            activeChart.trendLines = [];
+            drawAllTrendLines(activeTimeframe);
+
+            saveSharedLinesToStorage();
+            saveLinesToStorage(activeTimeframe);
+        }
+
+        // 共有水平線をストレージに保存
+        function saveSharedLinesToStorage() {
+            const symbol = document.getElementById('symbol').value;
+            const key = `shared_hlines_${symbol}`;
+
+            // 最初のチャートから水平線データを取得（全チャート同じなので）
+            const chartObj = charts[TIMEFRAMES[0]];
+            const hlines = chartObj.drawnLines.map(l => ({
+                id: l.id,
+                price: l.price,
+                color: l.color
+            }));
+
+            localStorage.setItem(key, JSON.stringify(hlines));
+        }
+
+        // トレンドライン（個別）をストレージに保存
+        function saveLinesToStorage(tf) {
+            const symbol = document.getElementById('symbol').value;
+            const key = `trendlines_${symbol}_${tf}`;
+            const chartObj = charts[tf];
+
+            const trendlines = chartObj.trendLines.map(l => ({
+                points: l.points,
+                color: l.color
+            }));
+            localStorage.setItem(key, JSON.stringify(trendlines));
+        }
+
+        // 共有水平線をストレージから読み込み（初回のみ呼ぶ）
+        function loadSharedLinesFromStorage() {
+            const symbol = document.getElementById('symbol').value;
+            const key = `shared_hlines_${symbol}`;
+
+            const saved = localStorage.getItem(key);
+            if (!saved) return;
+
+            try {
+                const hlines = JSON.parse(saved);
+
+                hlines.forEach(l => {
+                    const id = l.id || ++lineIdCounter;
+                    if (id > lineIdCounter) lineIdCounter = id;
+
+                    // 全チャートに水平線を追加
+                    TIMEFRAMES.forEach(tf => {
+                        const chartObj = charts[tf];
+                        const lineObj = chartObj.candleSeries.createPriceLine({
+                            price: l.price,
+                            color: l.color,
+                            lineWidth: 2,
+                            lineStyle: LightweightCharts.LineStyle.Solid,
+                            axisLabelVisible: true,
+                        });
+                        chartObj.drawnLines.push({
+                            id: id,
+                            type: 'hline',
+                            price: l.price,
+                            color: l.color,
+                            lineObj: lineObj
+                        });
+                    });
+                });
+            } catch (e) {
+                console.error('Failed to load shared lines:', e);
+            }
+        }
+
+        // トレンドライン（個別）をストレージから読み込み
+        function loadLinesFromStorage(tf) {
+            const symbol = document.getElementById('symbol').value;
+            const key = `trendlines_${symbol}_${tf}`;
+            const chartObj = charts[tf];
+
+            const saved = localStorage.getItem(key);
+            if (!saved) return;
+
+            try {
+                const trendlines = JSON.parse(saved);
+
+                trendlines.forEach(l => {
+                    const id = ++lineIdCounter;
+                    chartObj.trendLines.push({
+                        id: id,
+                        points: l.points,
+                        color: l.color
+                    });
+                });
+                drawAllTrendLines(tf);
+            } catch (e) {
+                console.error('Failed to load trendlines:', e);
+            }
+        }
+
         // 初期化
         document.addEventListener('DOMContentLoaded', async () => {
             initChart();
@@ -714,18 +1390,64 @@
             await updatePendingActions();
             await updateRecentData();
 
+            // セッション状態の初期化
+            await updateSessionStatus();
+
             // WebSocket接続
             connectWebSocket();
 
             // イベントリスナー
             document.getElementById('loadBtn').addEventListener('click', loadOHLC);
             document.getElementById('symbol').addEventListener('change', loadOHLC);
-            document.getElementById('timeframe').addEventListener('change', loadOHLC);
 
             // Enterキーで思考を送信
             document.getElementById('thoughtInput').addEventListener('keydown', (e) => {
                 if (e.key === 'Enter' && e.ctrlKey) {
                     submitThought();
+                }
+            });
+
+            // 描画ツールバーイベント
+            document.getElementById('drawHLine').addEventListener('click', () => setDrawingMode('hline'));
+            document.getElementById('drawTrendLine').addEventListener('click', () => setDrawingMode('trendline'));
+            document.getElementById('drawPointer').addEventListener('click', () => setDrawingMode('pointer'));
+            document.getElementById('deleteAllLines').addEventListener('click', () => {
+                if (confirm('全ての線を削除しますか？')) {
+                    deleteAllLines();
+                }
+            });
+
+            // カラーピッカー
+            document.querySelectorAll('.color-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('selected'));
+                    btn.classList.add('selected');
+                    selectedColor = btn.dataset.color;
+                });
+            });
+
+            // キーボードショートカット
+            document.addEventListener('keydown', (e) => {
+                // テキスト入力中は無視
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
+                    return;
+                }
+
+                switch (e.key.toLowerCase()) {
+                    case 'h':
+                        setDrawingMode('hline');
+                        break;
+                    case 't':
+                        setDrawingMode('trendline');
+                        break;
+                    case 'escape':
+                        setDrawingMode('pointer');
+                        break;
+                    case 'delete':
+                    case 'backspace':
+                        // 最後に描画した線を削除
+                        deleteLastLine();
+                        break;
                 }
             });
         });

@@ -87,3 +87,64 @@ class ThoughtInput(BaseModel):
     thought: str
     action: Action
     timestamp: Optional[datetime] = None
+
+
+# ===== Session Management Models =====
+
+class SessionStatus(str, Enum):
+    """Trading session status."""
+    ACTIVE = "active"
+    COMPLETED = "completed"
+
+
+class HoldRecord(BaseModel):
+    """Record of a HOLD action within a session."""
+    time: datetime
+    thought: str
+
+
+class SessionEntry(BaseModel):
+    """Entry point of a trading session."""
+    time: datetime
+    action: Action = Action.BUY
+    price: float
+    thought: str
+
+
+class SessionExit(BaseModel):
+    """Exit point of a trading session."""
+    time: datetime
+    action: Action  # SELL or STOP_LOSS
+    price: float
+    thought: str
+
+
+class SessionResult(BaseModel):
+    """Result of a completed trading session."""
+    duration_minutes: int
+    profit: float
+    profit_pips: float
+
+
+class SnapshotData(BaseModel):
+    """Data for a single snapshot within a session."""
+    timestamp: datetime
+    action: Action
+    thought: str
+    screenshots: Dict[str, str]  # {"D1": "path/to/D1.png", ...}
+    market_data_path: str
+
+
+class TradingSession(BaseModel):
+    """Complete trading session from BUY to SELL/STOP_LOSS."""
+    session_id: str
+    symbol: str = "XAUUSD"
+    status: SessionStatus = SessionStatus.ACTIVE
+
+    entry: Optional[SessionEntry] = None
+    exit: Optional[SessionExit] = None
+    holds: List[HoldRecord] = Field(default_factory=list)
+
+    result: Optional[SessionResult] = None
+    snapshot_count: int = 0
+    timeframes: List[str] = Field(default_factory=lambda: ["D1", "H4", "M15", "M5", "M1"])

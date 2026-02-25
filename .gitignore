@@ -21,18 +21,7 @@ build/
 .env
 .env.local
 
-# Data directories (large files)
-data/screenshots/
-data/training/
-data/actions/
-data/thoughts/
-
-# Keep directory structure
-!data/.gitkeep
-!data/screenshots/.gitkeep
-!data/training/.gitkeep
-!data/actions/.gitkeep
-!data/thoughts/.gitkeep
+# Data directories - all tracked in git
 
 # Logs
 *.log

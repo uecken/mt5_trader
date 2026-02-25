@@ -39,6 +39,19 @@ class CollectorStartRequest(BaseModel):
     screenshot_interval: int = 30
 
 
+class SessionStartRequest(BaseModel):
+    thought: str
+
+
+class SessionHoldRequest(BaseModel):
+    thought: str
+
+
+class SessionEndRequest(BaseModel):
+    action: str  # SELL or STOP_LOSS
+    thought: str
+
+
 # ============ Original endpoints ============
 
 @app.get("/", response_class=HTMLResponse)
@@ -208,6 +221,227 @@ async def get_recent_data(limit: int = Query(default=10, ge=1, le=100)):
             }
             for d in data
         ]
+    }
+
+
+# ============ Session endpoints ============
+
+@app.get("/api/sessions")
+async def list_sessions(limit: int = Query(default=10, ge=1, le=50)):
+    """セッション一覧を取得"""
+    service = get_collector_service()
+    sessions = service.list_sessions(limit)
+
+    return {
+        "count": len(sessions),
+        "sessions": [
+            {
+                "session_id": s.session_id,
+                "symbol": s.symbol,
+                "status": s.status.value,
+                "entry": {
+                    "time": s.entry.time.isoformat() if s.entry else None,
+                    "price": s.entry.price if s.entry else None,
+                    "thought": s.entry.thought if s.entry else None
+                } if s.entry else None,
+                "exit": {
+                    "time": s.exit.time.isoformat() if s.exit else None,
+                    "action": s.exit.action.value if s.exit else None,
+                    "price": s.exit.price if s.exit else None
+                } if s.exit else None,
+                "hold_count": len(s.holds),
+                "result": {
+                    "duration_minutes": s.result.duration_minutes,
+                    "profit": s.result.profit,
+                    "profit_pips": s.result.profit_pips
+                } if s.result else None
+            }
+            for s in sessions
+        ]
+    }
+
+
+@app.get("/api/sessions/active")
+async def get_active_session():
+    """アクティブなセッションを取得"""
+    service = get_collector_service()
+    session = service.get_active_session()
+
+    if not session:
+        return {"session": None}
+
+    return {
+        "session": {
+            "session_id": session.session_id,
+            "symbol": session.symbol,
+            "status": session.status.value,
+            "entry": {
+                "time": session.entry.time.isoformat() if session.entry else None,
+                "price": session.entry.price if session.entry else None,
+                "thought": session.entry.thought if session.entry else None
+            } if session.entry else None,
+            "hold_count": len(session.holds),
+            "snapshot_count": session.snapshot_count
+        }
+    }
+
+
+@app.get("/api/sessions/{session_id}")
+async def get_session(session_id: str):
+    """セッション詳細を取得"""
+    service = get_collector_service()
+    session = service.get_session(session_id)
+
+    if not session:
+        raise HTTPException(status_code=404, detail=f"Session not found: {session_id}")
+
+    return {
+        "session": {
+            "session_id": session.session_id,
+            "symbol": session.symbol,
+            "status": session.status.value,
+            "entry": {
+                "time": session.entry.time.isoformat() if session.entry else None,
+                "action": session.entry.action.value if session.entry else None,
+                "price": session.entry.price if session.entry else None,
+                "thought": session.entry.thought if session.entry else None
+            } if session.entry else None,
+            "exit": {
+                "time": session.exit.time.isoformat() if session.exit else None,
+                "action": session.exit.action.value if session.exit else None,
+                "price": session.exit.price if session.exit else None,
+                "thought": session.exit.thought if session.exit else None
+            } if session.exit else None,
+            "holds": [
+                {
+                    "time": h.time.isoformat(),
+                    "thought": h.thought
+                }
+                for h in session.holds
+            ],
+            "result": {
+                "duration_minutes": session.result.duration_minutes,
+                "profit": session.result.profit,
+                "profit_pips": session.result.profit_pips
+            } if session.result else None,
+            "snapshot_count": session.snapshot_count,
+            "timeframes": session.timeframes
+        }
+    }
+
+
+@app.post("/api/sessions/start")
+async def start_session(request: SessionStartRequest):
+    """
+    新しいセッションを開始（BUYエントリー）
+    - 全時間足のスクリーンショットを取得
+    - 市場データを保存
+    - 思考を記録
+    """
+    service = get_collector_service()
+
+    if service.has_active_session():
+        raise HTTPException(
+            status_code=400,
+            detail="Active session exists. End it before starting a new one."
+        )
+
+    session_id = service.start_session(request.thought)
+
+    if not session_id:
+        raise HTTPException(status_code=500, detail="Failed to start session")
+
+    # Notify WebSocket clients
+    await notify_clients({
+        "type": "session_started",
+        "session_id": session_id
+    })
+
+    return {
+        "status": "started",
+        "session_id": session_id,
+        "message": "Session started with BUY entry"
+    }
+
+
+@app.post("/api/sessions/hold")
+async def add_hold(request: SessionHoldRequest):
+    """
+    現在のセッションにHOLDを追加
+    - 全時間足のスクリーンショットを取得
+    - 市場データを保存
+    - 思考を記録
+    """
+    service = get_collector_service()
+
+    if not service.has_active_session():
+        raise HTTPException(status_code=400, detail="No active session")
+
+    success = service.add_hold(request.thought)
+
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to add HOLD")
+
+    # Notify WebSocket clients
+    await notify_clients({
+        "type": "hold_added",
+        "thought": request.thought
+    })
+
+    return {
+        "status": "added",
+        "message": "HOLD recorded"
+    }
+
+
+@app.post("/api/sessions/end")
+async def end_session(request: SessionEndRequest):
+    """
+    現在のセッションを終了（SELL/STOP_LOSS）
+    - 全時間足のスクリーンショットを取得
+    - 市場データを保存
+    - 結果を計算
+    """
+    service = get_collector_service()
+
+    if not service.has_active_session():
+        raise HTTPException(status_code=400, detail="No active session")
+
+    try:
+        action = Action(request.action)
+        if action not in [Action.SELL, Action.STOP_LOSS]:
+            raise ValueError("Invalid action for ending session")
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid action: {request.action}. Must be SELL or STOP_LOSS"
+        )
+
+    completed_session = service.end_session(action, request.thought)
+
+    if not completed_session:
+        raise HTTPException(status_code=500, detail="Failed to end session")
+
+    # Notify WebSocket clients
+    await notify_clients({
+        "type": "session_ended",
+        "session_id": completed_session.session_id,
+        "action": action.value,
+        "result": {
+            "profit": completed_session.result.profit if completed_session.result else None,
+            "duration_minutes": completed_session.result.duration_minutes if completed_session.result else None
+        }
+    })
+
+    return {
+        "status": "ended",
+        "session_id": completed_session.session_id,
+        "action": action.value,
+        "result": {
+            "duration_minutes": completed_session.result.duration_minutes,
+            "profit": completed_session.result.profit,
+            "profit_pips": completed_session.result.profit_pips
+        } if completed_session.result else None
     }
 
 

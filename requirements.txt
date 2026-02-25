@@ -8,6 +8,7 @@ pandas
 mss>=9.0.0                   # Fast screen capture
 pillow>=10.0.0               # Image processing
 pywin32                      # Windows API for window detection
+pyautogui>=0.9.54            # GUI automation for MT5 tab switching
 
 # Technical Analysis
 ta>=0.10.2                   # Technical indicators library (RSI, MACD, MA, BB)

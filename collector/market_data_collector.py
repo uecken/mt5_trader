@@ -28,12 +28,14 @@ TIMEFRAME_MAP = {
 }
 
 # Default candle counts per timeframe
+# D1, H4: 1 month of data
+# M15, M5, M1: 100 candles
 DEFAULT_CANDLE_COUNTS = {
-    "D1": 30,
-    "H4": 50,
-    "M15": 100,
-    "M5": 100,
-    "M1": 100,
+    "D1": 30,     # 1 month
+    "H4": 180,    # 1 month (6 candles/day * 30 days)
+    "M15": 100,   # ~1 day
+    "M5": 100,    # ~8 hours
+    "M1": 100,    # ~1.5 hours
 }
 
 

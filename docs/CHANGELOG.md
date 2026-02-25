@@ -6,6 +6,7 @@
 
 #### 追加ファイル
 - `README.md` - プロジェクトのメインREADME
+- `docs/environment_setup.md` - 実行環境セットアップガイド（Linux互換性分析含む）
 - `docs/images/` - スクリーンショット画像フォルダ
   - `main_interface.png` - メイン画面
   - `session_viewer.png` - セッション閲覧画面

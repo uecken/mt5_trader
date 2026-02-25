@@ -184,6 +184,112 @@ Windows Host
 
 ---
 
+## macOS互換性分析
+
+### 結論: **macOSネイティブ動作は不可**
+
+MetaTrader 5アプリ自体はmacOS（Apple Silicon含む）で動作しますが、**MetaTrader5 Pythonパッケージ**がWindows専用（win_amd64）のため、このシステムはmacOSでネイティブ動作しません。
+
+### 問題点
+
+| コンポーネント | macOS対応 | 備考 |
+|---------------|----------|------|
+| MetaTrader 5 アプリ | ✅ 対応 | M1/M2/M3ネイティブ対応 |
+| MetaTrader5 Pythonパッケージ | ❌ 非対応 | Windows専用（C++コンパイル済み） |
+| pywin32 | ❌ 非対応 | Windows専用 |
+| ctypes.windll | ❌ 非対応 | Windows専用 |
+
+### 代替案
+
+#### 案1: SiliconMetaTrader5 (Apple Silicon向け)
+
+[SiliconMetaTrader5](https://github.com/bahadirumutiscimen/silicon-metatrader5) プロジェクトを使用する方法です。
+
+```
+macOS (Apple Silicon)
+├── Docker (Colima + QEMU x86エミュレーション)
+│   └── MetaTrader 5 (ヘッドレス)
+└── Python (ネイティブ)
+    └── カスタムRPCブリッジ経由でMT5と通信
+```
+
+**特徴:**
+- Docker + QEMUによるx86エミュレーション
+- カスタムRPCブリッジでPython連携
+- オープンソース
+
+**制限事項:**
+- エミュレーションによるパフォーマンス低下
+- 本番トレード（高頻度・高額）には非推奨
+- セットアップが複雑
+
+**参考:**
+- [MetaTrader 5 + Python on Apple Silicon Macs](https://medium.com/@bahadirumutiscimen/metatrader-5-python-on-apple-silicon-macs-m1-m2-m3-64d6fa2f7a49)
+
+#### 案2: 仮想マシン (Parallels / UTM)
+
+```
+macOS
+└── Parallels Desktop / UTM
+    └── Windows 11
+        ├── MetaTrader 5
+        ├── Python 3.11
+        └── 本システム
+```
+
+**特徴:**
+- 完全なWindows環境
+- 公式MetaTrader5パッケージが動作
+- Parallels: Apple Silicon最適化済み
+
+**制限事項:**
+- 有料ライセンス（Parallels）
+- リソース消費が大きい
+- UTM（無料）はパフォーマンス低下
+
+#### 案3: リモート開発 (推奨)
+
+```
+macOS (開発マシン)
+├── VS Code + Remote SSH
+└── コード編集・テスト設計
+
+Windows VM (Azure/AWS)
+├── MetaTrader 5
+├── Python 3.11
+└── 本システム（実行）
+```
+
+**特徴:**
+- macOSで快適に開発
+- 実行はクラウドWindows VM
+- 本番環境と同一構成
+
+**推奨理由:**
+- [MQL5公式フォーラム](https://www.mql5.com/en/forum/425741)でも、本番トレードにはネイティブWindows環境が推奨されている
+- エミュレーション層のない環境でミリ秒単位の精度が保証される
+
+### macOS開発環境の構築例
+
+開発のみmacOSで行い、実行はWindows VMで行う構成:
+
+```bash
+# macOS側（開発）
+git clone https://github.com/your-repo/mt5_trader.git
+cd mt5_trader
+
+# Windows専用パッケージを除外したrequirements-dev.txt
+pip install fastapi uvicorn pandas ta pydantic pyyaml
+
+# コード編集・テスト設計
+code .
+
+# Windows VM（Azure）に接続
+ssh user@your-windows-vm
+```
+
+---
+
 ## 推奨構成
 
 ### 開発環境

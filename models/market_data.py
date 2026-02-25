@@ -103,6 +103,13 @@ class HoldRecord(BaseModel):
     thought: str
 
 
+class HorizontalLineData(BaseModel):
+    """Data for a horizontal line from MT5."""
+    name: str
+    price: float
+    color: str = "#FF0000"
+
+
 class SessionEntry(BaseModel):
     """Entry point of a trading session."""
     time: datetime
@@ -133,12 +140,13 @@ class SnapshotData(BaseModel):
     thought: str
     screenshots: Dict[str, str]  # {"D1": "path/to/D1.png", ...}
     market_data_path: str
+    horizontal_lines: Optional[List[HorizontalLineData]] = None
 
 
 class TradingSession(BaseModel):
     """Complete trading session from BUY to SELL/STOP_LOSS."""
     session_id: str
-    symbol: str = "XAUUSD"
+    symbol: str = "XAUUSDp"
     status: SessionStatus = SessionStatus.ACTIVE
 
     entry: Optional[SessionEntry] = None

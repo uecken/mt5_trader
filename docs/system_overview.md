@@ -13,31 +13,47 @@ MT5トレーダーの取引行動と思考を記録・分析し、E2E模倣学�
 
 ## システム画面
 
-![MT5 Trader思考解析 & 売買システム](./screenshots/main_interface.png)
+### メイン画面
 
-### 画面構成
+![メイン画面](./images/main_interface.png)
 
 | エリア | 説明 |
 |--------|------|
 | ヘッダー | 銘柄選択、時間足選択、表示本数設定 |
 | チャートエリア | ローソク足チャート表示（Lightweight Charts使用） |
-| データ収集パネル | コレクター制御、思考入力 |
+| 水平線 | MT5で描画した水平線をリアルタイム表示 |
+| セッション管理パネル | BUY/HOLD/SELL/STOP_LOSS ボタン、思考入力 |
+
+### セッション閲覧画面
+
+![セッション閲覧画面](./images/session_viewer.png)
+
+| エリア | 説明 |
+|--------|------|
+| スナップショット一覧 | BUY/HOLD などの各時点のスナップショット |
+| セッション一覧 | 過去の取引セッション一覧 |
+| チャートタブ | OHLCデータと水平線をインタラクティブ表示 |
+| スクリーンショットタブ | MT5で取得したスクリーンショット画像 |
+| 数値データタブ | 水平線リスト、全時間足のインジケーター一覧 |
 
 ---
 
 ## 機能一覧
 
 ### 1. チャート表示機能
-- **対応銘柄**: XAUUSD（ゴールド）他、MT5で利用可能な全銘柄
+- **対応銘柄**: XAUUSDp（ゴールド）他、MT5で利用可能な全銘柄
 - **対応時間足**: M1, M5, M15, M30, H1, H4, D1, W1, MN1
 - **表示本数**: 10〜1000本（デフォルト200本）
+- **水平線表示**: MT5で描画した水平線をリアルタイム表示（5秒毎自動更新）
 
 ### 2. データ収集機能
 
 #### 2.1 スクリーンショット収集
-- **取得間隔**: 30秒毎（設定変更可能）
-- **保存先**: `data/screenshots/`
-- **ファイル名形式**: `YYYYMMDD_HHMMSS.png`
+- **取得方法**: MQL5 ChartScreenShot() API（ChartExporterEA使用）
+- **対応時間足**: D1, H4, M15, M5, M1 の5時間足を自動キャプチャ
+- **水平線対応**: 全チャートから水平線を収集してスクリーンショットに含める
+- **保存先**: `data/sessions/session_xxx/snapshots/xxx/screenshots/`
+- **ファイル名形式**: `D1.png`, `H4.png`, `M15.png`, `M5.png`, `M1.png`
 
 #### 2.2 マルチタイムフレームOHLCデータ取得
 スクリーンショットと同時に以下の時間足データを記録:
@@ -45,7 +61,7 @@ MT5トレーダーの取引行動と思考を記録・分析し、E2E模倣学�
 | 時間足 | 取得本数 | 用途 |
 |--------|----------|------|
 | D1（日足） | 30本 | 長期トレンド把握 |
-| H4（4時間足） | 50本 | 中期トレンド把握 |
+| H4（4時間足） | 180本 | 中期トレンド把握（1ヶ月分） |
 | M15（15分足） | 100本 | 短期トレンド把握 |
 | M5（5分足） | 100本 | エントリータイミング |
 | M1（1分足） | 100本 | 詳細な値動き |
@@ -91,6 +107,7 @@ data/
             └── YYYYMMDD_HHMMSS_ACTION/
                 ├── thought.json
                 ├── market_data.json
+                ├── horizontal_lines.json  # MT5水平線データ
                 └── screenshots/
                     ├── D1.png, H4.png, M15.png, M5.png, M1.png
 ```
@@ -104,7 +121,7 @@ data/
   "thought": "ダブルトップ形成後、ネックライン割れを確認。RSI30以下からの反発も確認したのでエントリー",
   "position_info": {
     "ticket": 12345678,
-    "symbol": "XAUUSD",
+    "symbol": "XAUUSDp",
     "volume": 0.1,
     "price": 2050.50,
     "profit": 0.0,
@@ -218,16 +235,22 @@ MT5/
 │   └── settings.py             # 設定管理
 │
 ├── collector/                  # データ収集モジュール
-│   ├── screen_capture.py       # スクリーンショット取得（マルチタイムフレーム対応）
+│   ├── screen_capture.py       # スクリーンショット取得（MQL5連携）
 │   ├── market_data_collector.py # マルチタイムフレームOHLC
 │   ├── position_monitor.py     # ポジション監視
 │   ├── thought_input.py        # 思考入力管理
 │   ├── data_linker.py          # データ紐付け
+│   ├── horizontal_lines.py     # MT5水平線読み込み
 │   ├── session_manager.py      # セッション管理
 │   └── collector_service.py    # 収集サービス統合
 │
 ├── models/
 │   └── market_data.py          # データモデル定義
+│
+├── mql5/                       # MQL5ファイル（MT5にコピーして使用）
+│   ├── HorizontalLinesExporter.mq5  # 水平線エクスポートIndicator
+│   ├── ChartExporterEA.mq5          # スクリーンショットEA（推奨）
+│   └── ChartExporter.mq5            # スクリーンショットIndicator（非推奨）
 │
 ├── data/                       # 収集データ保存先
 │   ├── screenshots/
@@ -237,11 +260,14 @@ MT5/
 │   └── sessions/               # セッションデータ
 │
 ├── templates/
-│   └── index.html              # Webフロントエンド
+│   ├── index.html              # メインWebフロントエンド
+│   └── sessions.html           # セッション閲覧ページ
 │
 └── docs/
     ├── system_overview.md      # このドキュメント
-    └── session_management_plan.md # セッション管理実装計画
+    ├── mt5_indicator_setup.md  # MT5セットアップ手順
+    ├── session_management_plan.md # セッション管理実装計画
+    └── CHANGELOG.md            # 変更履歴
 ```
 
 ---
@@ -275,7 +301,11 @@ python app.py
 
 **前提条件:**
 - MetaTrader 5 が起動していること
-- MT5でXAUUSD等の銘柄が表示可能なこと
+- MT5でXAUUSDp等の銘柄が表示可能なこと
+- MQL5ファイルがセットアップ済みであること（詳細: [mt5_indicator_setup.md](./mt5_indicator_setup.md)）
+  - HorizontalLinesExporter（Indicator）
+  - ChartExporterEA（Expert Advisor）
+- MT5のアルゴリズム取引が有効（緑色）であること
 
 ---
 
@@ -311,5 +341,8 @@ python app.py
 ## 作成日
 2026年2月13日
 
+## 最終更新日
+2026年2月25日
+
 ## バージョン
-1.0.0
+1.4.1

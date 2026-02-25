@@ -13,6 +13,7 @@ import logging
 import mt5_data
 from models.market_data import Action, ThoughtInput as ThoughtInputModel
 from collector.collector_service import get_collector_service, CollectorService
+from collector.horizontal_lines import get_horizontal_lines_reader
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -35,7 +36,7 @@ class ThoughtSubmitRequest(BaseModel):
 
 
 class CollectorStartRequest(BaseModel):
-    symbol: str = "XAUUSD"
+    symbol: str = "XAUUSDp"
     screenshot_interval: int = 30
 
 
@@ -61,12 +62,19 @@ async def index():
     return html_path.read_text(encoding="utf-8")
 
 
+@app.get("/sessions", response_class=HTMLResponse)
+async def sessions_page():
+    """セッション閲覧ページ"""
+    html_path = Path(__file__).parent / "templates" / "sessions.html"
+    return html_path.read_text(encoding="utf-8")
+
+
 @app.get("/api/symbols")
 async def get_symbols():
     """利用可能な銘柄一覧を取得"""
     symbols = mt5_data.get_available_symbols()
-    # よく使う銘柄を優先的に表示
-    priority = ["XAUUSD", "USDJPY", "EURUSD", "GBPUSD", "EURJPY", "GBPJPY", "AUDUSD"]
+    # よく使う銘柄を優先的に表示（XAUUSDpは一部ブローカーの金シンボル）
+    priority = ["XAUUSDp", "XAUUSD", "USDJPY", "EURUSD", "GBPUSD", "EURJPY", "GBPJPY", "AUDUSD"]
     priority_symbols = [s for s in priority if s in symbols]
     other_symbols = [s for s in symbols if s not in priority]
     return {"symbols": priority_symbols + other_symbols}
@@ -74,7 +82,7 @@ async def get_symbols():
 
 @app.get("/api/ohlc")
 async def get_ohlc(
-    symbol: str = Query(default="XAUUSD", description="通貨ペア"),
+    symbol: str = Query(default="XAUUSDp", description="通貨ペア"),
     timeframe: str = Query(default="H1", description="時間足"),
     count: int = Query(default=200, ge=10, le=1000, description="バー数")
 ):
@@ -330,6 +338,93 @@ async def get_session(session_id: str):
     }
 
 
+@app.get("/api/sessions/{session_id}/snapshots")
+async def list_snapshots(session_id: str):
+    """セッションのスナップショット一覧を取得"""
+    import json
+
+    snapshots_dir = Path("data/sessions") / f"session_{session_id}" / "snapshots"
+
+    if not snapshots_dir.exists():
+        raise HTTPException(status_code=404, detail=f"Session not found: {session_id}")
+
+    snapshots = []
+    for snapshot_dir in sorted(snapshots_dir.iterdir()):
+        if snapshot_dir.is_dir():
+            # Read thought.json for action and thought
+            thought_file = snapshot_dir / "thought.json"
+            thought_data = {}
+            if thought_file.exists():
+                with open(thought_file, "r", encoding="utf-8") as f:
+                    thought_data = json.load(f)
+
+            snapshots.append({
+                "name": snapshot_dir.name,
+                "timestamp": thought_data.get("timestamp", ""),
+                "action": thought_data.get("action", "UNKNOWN"),
+                "thought": thought_data.get("thought", "")
+            })
+
+    return {
+        "session_id": session_id,
+        "snapshots": snapshots
+    }
+
+
+@app.get("/api/sessions/{session_id}/snapshots/{snapshot_name}")
+async def get_snapshot_detail(session_id: str, snapshot_name: str):
+    """スナップショット詳細を取得"""
+    import json
+
+    session_dir = Path("data/sessions") / f"session_{session_id}" / "snapshots" / snapshot_name
+
+    if not session_dir.exists():
+        raise HTTPException(status_code=404, detail=f"Snapshot not found: {snapshot_name}")
+
+    result = {
+        "session_id": session_id,
+        "snapshot_name": snapshot_name,
+        "thought": None,
+        "market_data": None,
+        "horizontal_lines": []
+    }
+
+    # Read thought.json
+    thought_file = session_dir / "thought.json"
+    if thought_file.exists():
+        with open(thought_file, "r", encoding="utf-8") as f:
+            thought_data = json.load(f)
+            result["thought"] = thought_data.get("thought", "")
+
+    # Read market_data.json
+    market_data_file = session_dir / "market_data.json"
+    if market_data_file.exists():
+        with open(market_data_file, "r", encoding="utf-8") as f:
+            result["market_data"] = json.load(f)
+
+    # Read horizontal_lines.json
+    hlines_file = session_dir / "horizontal_lines.json"
+    if hlines_file.exists():
+        with open(hlines_file, "r", encoding="utf-8") as f:
+            hlines_data = json.load(f)
+            result["horizontal_lines"] = hlines_data.get("lines", [])
+
+    return result
+
+
+@app.get("/api/sessions/{session_id}/snapshots/{snapshot_name}/image/{timeframe}")
+async def get_snapshot_image(session_id: str, snapshot_name: str, timeframe: str):
+    """スナップショット画像を取得"""
+    from fastapi.responses import FileResponse
+
+    image_path = Path("data/sessions") / f"session_{session_id}" / "snapshots" / snapshot_name / "screenshots" / f"{timeframe}.png"
+
+    if not image_path.exists():
+        raise HTTPException(status_code=404, detail=f"Screenshot not found: {timeframe}")
+
+    return FileResponse(image_path, media_type="image/png")
+
+
 @app.post("/api/sessions/start")
 async def start_session(request: SessionStartRequest):
     """
@@ -442,6 +537,32 @@ async def end_session(request: SessionEndRequest):
             "profit": completed_session.result.profit,
             "profit_pips": completed_session.result.profit_pips
         } if completed_session.result else None
+    }
+
+
+# ============ Horizontal Lines endpoints ============
+
+@app.get("/api/horizontal-lines")
+async def get_horizontal_lines():
+    """
+    MT5から取得した水平線データを返す
+    MQL5スクリプトで出力されたJSONファイルを読み込む
+    """
+    reader = get_horizontal_lines_reader()
+    data = reader.read_raw()
+
+    return {
+        "symbol": data.get("symbol", ""),
+        "timestamp": data.get("timestamp", ""),
+        "lines": [
+            {
+                "name": line.get("name", ""),
+                "price": line.get("price", 0),
+                "color": line.get("color", "#FF0000")
+            }
+            for line in data.get("lines", [])
+        ],
+        "file_path": reader.get_file_path()
     }
 
 

@@ -2,7 +2,7 @@
 Thought input module.
 Manages trader thought/reasoning input via web interface.
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List, Dict, Callable
 from pathlib import Path
 import json
@@ -54,7 +54,7 @@ class ThoughtManager:
         """
         pending = {
             "action": action,
-            "timestamp": timestamp or datetime.now(),
+            "timestamp": timestamp or datetime.now(timezone.utc),
             "thought": None
         }
         self._pending_actions.append(pending)
@@ -101,7 +101,7 @@ class ThoughtManager:
         thought = ThoughtInput(
             thought=thought_text,
             action=action,
-            timestamp=timestamp or datetime.now()
+            timestamp=timestamp or datetime.now(timezone.utc)
         )
 
         # Find and update pending action
@@ -124,7 +124,7 @@ class ThoughtManager:
 
     def _save_thought(self, thought: ThoughtInput):
         """Save thought to storage."""
-        timestamp_str = thought.timestamp.strftime("%Y%m%d_%H%M%S") if thought.timestamp else datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp_str = thought.timestamp.strftime("%Y%m%d_%H%M%S") if thought.timestamp else datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
         filename = f"{timestamp_str}_{thought.action.value}.json"
         filepath = self.storage_dir / filename
 

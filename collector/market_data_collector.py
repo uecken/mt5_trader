@@ -44,7 +44,7 @@ class MarketDataCollector:
 
     def __init__(
         self,
-        symbol: str = "XAUUSD",
+        symbol: str = "XAUUSDp",
         timeframes: List[str] = None,
         candle_counts: Dict[str, int] = None
     ):
@@ -56,19 +56,56 @@ class MarketDataCollector:
             timeframes: List of timeframes to collect
             candle_counts: Number of candles per timeframe
         """
-        self.symbol = symbol
+        self._requested_symbol = symbol
+        self.symbol = symbol  # Will be resolved on initialize
         self.timeframes = timeframes or ["D1", "H4", "M15", "M5", "M1"]
         self.candle_counts = candle_counts or DEFAULT_CANDLE_COUNTS
         self._initialized = False
 
+    def _resolve_symbol(self, base_symbol: str) -> str:
+        """
+        Resolve the actual symbol name available in MT5.
+        Tries the base symbol first, then common suffixes.
+
+        Args:
+            base_symbol: Base symbol name (e.g., "XAUUSD")
+
+        Returns:
+            Actual symbol name available in MT5
+        """
+        # Common suffixes used by different brokers
+        suffixes = ["", "p", "micro", "m", ".a", ".b", "_SB"]
+
+        for suffix in suffixes:
+            test_symbol = base_symbol + suffix
+            info = mt5.symbol_info(test_symbol)
+            if info is not None:
+                if test_symbol != base_symbol:
+                    logger.info(f"Symbol resolved: {base_symbol} -> {test_symbol}")
+                return test_symbol
+
+        # Try finding similar symbols
+        all_symbols = mt5.symbols_get()
+        if all_symbols:
+            for s in all_symbols:
+                if base_symbol in s.name and s.visible:
+                    logger.info(f"Symbol found via search: {base_symbol} -> {s.name}")
+                    return s.name
+
+        logger.warning(f"Could not resolve symbol: {base_symbol}, using as-is")
+        return base_symbol
+
     def initialize(self) -> bool:
-        """Initialize MT5 connection."""
+        """Initialize MT5 connection and resolve symbol."""
         if self._initialized:
             return True
 
         if not mt5.initialize():
             logger.error(f"MT5 initialization failed: {mt5.last_error()}")
             return False
+
+        # Resolve actual symbol name
+        self.symbol = self._resolve_symbol(self._requested_symbol)
 
         self._initialized = True
         return True
@@ -251,7 +288,7 @@ if __name__ == "__main__":
     # Test the market data collector
     logging.basicConfig(level=logging.INFO)
 
-    collector = MarketDataCollector(symbol="XAUUSD")
+    collector = MarketDataCollector(symbol="XAUUSDp")
     market_state = collector.collect_all_timeframes()
 
     if market_state:

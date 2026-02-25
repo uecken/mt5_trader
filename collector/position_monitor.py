@@ -19,7 +19,7 @@ class PositionMonitor:
 
     def __init__(
         self,
-        symbol: str = "XAUUSD",
+        symbol: str = "XAUUSDp",
         poll_interval: float = 1.0,
         on_action_callback: Optional[Callable[[Action, Optional[PositionInfo]], None]] = None
     ):
@@ -231,7 +231,7 @@ if __name__ == "__main__":
             print(f"  Position: {position.ticket} {position.type} {position.volume} @ {position.price}")
 
     monitor = PositionMonitor(
-        symbol="XAUUSD",
+        symbol="XAUUSDp",
         poll_interval=1.0,
         on_action_callback=on_action
     )

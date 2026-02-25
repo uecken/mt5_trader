@@ -39,7 +39,7 @@ class MT5Settings(BaseSettings):
     timeout: int = Field(default=60000, description="Connection timeout in milliseconds")
 
     # Trading settings
-    default_symbol: str = Field(default="XAUUSD", description="Default trading symbol")
+    default_symbol: str = Field(default="XAUUSDp", description="Default trading symbol")
 
     # Timeframes for data collection
     timeframes: List[str] = Field(

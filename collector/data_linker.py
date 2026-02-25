@@ -2,7 +2,7 @@
 Data linker module.
 Links screenshots, market data, actions, and thoughts into unified training data.
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional
 from pathlib import Path
 import json
@@ -272,7 +272,7 @@ if __name__ == "__main__":
 
     # Test linking data
     data = linker.link_data(
-        timestamp=datetime.now(),
+        timestamp=datetime.now(timezone.utc),
         screenshot_path="data/screenshots/test.png",
         action=Action.BUY,
         thought="Test thought - RSI oversold"

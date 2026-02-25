@@ -4,15 +4,16 @@ Manages trading sessions from BUY to SELL/STOP_LOSS.
 """
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
 
 from models.market_data import (
     Action, MarketState, PositionInfo, SessionStatus,
     SessionEntry, SessionExit, SessionResult, HoldRecord,
-    TradingSession, SnapshotData
+    TradingSession, SnapshotData, HorizontalLineData
 )
+from collector.horizontal_lines import get_horizontal_lines_reader
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +27,7 @@ class SessionManager:
     def __init__(
         self,
         sessions_dir: Path = Path("data/sessions"),
-        symbol: str = "XAUUSD"
+        symbol: str = "XAUUSDp"
     ):
         """
         Initialize the session manager.
@@ -73,7 +74,7 @@ class SessionManager:
                 screenshots=screenshots
             )
 
-        timestamp = datetime.now()
+        timestamp = datetime.now(timezone.utc)
         session_id = timestamp.strftime("%Y%m%d_%H%M%S")
 
         # Create session directory structure
@@ -134,7 +135,7 @@ class SessionManager:
             logger.warning("No active session. Cannot add HOLD.")
             return False
 
-        timestamp = datetime.now()
+        timestamp = datetime.now(timezone.utc)
 
         # Add hold record
         hold_record = HoldRecord(time=timestamp, thought=thought)
@@ -183,7 +184,7 @@ class SessionManager:
             logger.warning("No active session to end.")
             return None
 
-        timestamp = datetime.now()
+        timestamp = datetime.now(timezone.utc)
 
         # Create session exit
         exit_info = SessionExit(
@@ -271,6 +272,17 @@ class SessionManager:
             if src_path and Path(src_path).exists():
                 dst_path = screenshots_dir / f"{tf}.png"
                 shutil.copy2(src_path, dst_path)
+
+        # Save horizontal_lines.json
+        try:
+            reader = get_horizontal_lines_reader()
+            raw_data = reader.read_raw()
+            if raw_data.get("lines"):
+                with open(snapshot_dir / "horizontal_lines.json", "w", encoding="utf-8") as f:
+                    json.dump(raw_data, f, ensure_ascii=False, indent=2)
+                logger.debug(f"Horizontal lines saved: {len(raw_data['lines'])} lines")
+        except Exception as e:
+            logger.warning(f"Failed to save horizontal lines: {e}")
 
         logger.debug(f"Snapshot saved: {snapshot_dir}")
 

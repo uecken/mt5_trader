@@ -34,16 +34,19 @@ data/sessions/
       20260216_224703_BUY/    # エントリー時点
         thought.json          # 思考
         market_data.json      # 全時間足のOHLC + 指標
+        horizontal_lines.json # MT5水平線データ
         screenshots/
           D1.png, H4.png, M15.png, M5.png, M1.png
       20260216_225000_HOLD/   # HOLD時点（思考付き）
         thought.json
         market_data.json
+        horizontal_lines.json
         screenshots/
           D1.png, H4.png, M15.png, M5.png, M1.png
       20260216_230500_SELL/   # 決済時点
         thought.json
         market_data.json
+        horizontal_lines.json
         screenshots/
           D1.png, H4.png, M15.png, M5.png, M1.png
 ```
@@ -52,7 +55,7 @@ data/sessions/
 ```json
 {
   "session_id": "20260216_224703",
-  "symbol": "XAUUSD",
+  "symbol": "XAUUSDp",
   "status": "active" | "completed",
 
   "entry": {

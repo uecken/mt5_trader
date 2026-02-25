@@ -5,13 +5,13 @@ Supports session-based data collection (BUY -> HOLD -> SELL/STOP_LOSS).
 """
 import asyncio
 import threading
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, Callable, Dict
 import logging
 import time
 
-from collector.screen_capture import ScreenCapture, MultiTimeframeCapture
+from collector.screen_capture import ScreenCapture, MultiTimeframeCapture, MQL5ScreenCapture
 from collector.market_data_collector import MarketDataCollector
 from collector.position_monitor import PositionMonitor
 from collector.thought_input import ThoughtManager
@@ -30,7 +30,7 @@ class CollectorService:
 
     def __init__(
         self,
-        symbol: str = "XAUUSD",
+        symbol: str = "XAUUSDp",
         screenshot_interval: int = 30,
         screenshots_dir: Path = Path("data/screenshots"),
         actions_dir: Path = Path("data/actions"),
@@ -69,6 +69,12 @@ class CollectorService:
             window_title=mt5_window_title
         )
 
+        # MQL5-based capture (preferred, works even when MT5 is not active)
+        self.mql5_capture = MQL5ScreenCapture(
+            output_dir=screenshots_dir,
+            timeout=30.0  # Allow time for multi-timeframe capture
+        )
+
         self.market_data_collector = MarketDataCollector(symbol=symbol)
 
         self.thought_manager = ThoughtManager(
@@ -105,7 +111,7 @@ class CollectorService:
 
     def _on_action_detected(self, action: Action, position_info: Optional[PositionInfo]):
         """Handle detected trading action."""
-        timestamp = datetime.now()
+        timestamp = datetime.now(timezone.utc)
         logger.info(f"Action detected: {action.value}")
 
         # Get current screenshot and market data
@@ -135,7 +141,7 @@ class CollectorService:
         logger.info(f"Thought received for {thought_input.action.value}")
 
         # Link the data
-        timestamp = thought_input.timestamp or datetime.now()
+        timestamp = thought_input.timestamp or datetime.now(timezone.utc)
         self.data_linker.link_data(
             timestamp=timestamp,
             screenshot_path=self._last_screenshot_path or "",
@@ -155,7 +161,7 @@ class CollectorService:
                 if screenshot_path:
                     self._last_screenshot_path = screenshot_path
                     self._status.screenshots_count += 1
-                    self._status.last_screenshot_at = datetime.now()
+                    self._status.last_screenshot_at = datetime.now(timezone.utc)
 
                 # Collect market data
                 market_state = self.market_data_collector.collect_all_timeframes()
@@ -166,7 +172,7 @@ class CollectorService:
                 last_action, _ = self.position_monitor.get_last_action()
                 if last_action == Action.HOLD and screenshot_path:
                     self.data_linker.link_data(
-                        timestamp=datetime.now(),
+                        timestamp=datetime.now(timezone.utc),
                         screenshot_path=screenshot_path,
                         action=Action.HOLD,
                         market_state=market_state
@@ -208,7 +214,7 @@ class CollectorService:
 
         # Update status
         self._status.is_running = True
-        self._status.started_at = datetime.now()
+        self._status.started_at = datetime.now(timezone.utc)
 
         logger.info("Collector service started successfully")
         return True
@@ -277,7 +283,23 @@ class CollectorService:
     # ===== Session-based Collection Methods =====
 
     def _capture_all_timeframes(self) -> Dict[str, str]:
-        """Capture screenshots for all timeframes."""
+        """
+        Capture screenshots for all timeframes.
+
+        Priority:
+        1. MQL5ScreenCapture (works even when MT5 is in background)
+        2. MultiTimeframeCapture (Windows capture, requires MT5 to be active)
+        """
+        # Try MQL5-based capture first (preferred)
+        logger.info("Attempting MQL5-based screenshot capture...")
+        screenshots = self.mql5_capture.capture_all_timeframes()
+
+        if screenshots:
+            logger.info(f"MQL5 capture successful: {len(screenshots)} timeframes")
+            return screenshots
+
+        # Fallback to Windows capture
+        logger.warning("MQL5 capture failed or no screenshots returned, falling back to Windows capture")
         return self.mtf_capture.capture_all_timeframes()
 
     def _get_current_market_state(self) -> Optional[MarketState]:
@@ -327,7 +349,7 @@ class CollectorService:
 
         if session_id:
             self._status.actions_count += 1
-            self._status.last_action_at = datetime.now()
+            self._status.last_action_at = datetime.now(timezone.utc)
             logger.info(f"Session started: {session_id}")
 
         return session_id
@@ -364,7 +386,7 @@ class CollectorService:
 
         if success:
             self._status.actions_count += 1
-            self._status.last_action_at = datetime.now()
+            self._status.last_action_at = datetime.now(timezone.utc)
 
         return success
 
@@ -407,7 +429,7 @@ class CollectorService:
 
         if completed_session:
             self._status.actions_count += 1
-            self._status.last_action_at = datetime.now()
+            self._status.last_action_at = datetime.now(timezone.utc)
             logger.info(f"Session ended: {completed_session.session_id}")
 
         return completed_session
@@ -451,7 +473,7 @@ if __name__ == "__main__":
             print(f"    Position: {position.ticket}")
 
     service = CollectorService(
-        symbol="XAUUSD",
+        symbol="XAUUSDp",
         screenshot_interval=30,
         on_action_callback=on_action
     )

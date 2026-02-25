@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MT5 Trader - セッション閲覧</title>
+    <script src="https://unpkg.com/lightweight-charts@3.8.0/dist/lightweight-charts.standalone.production.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            background: #0f0f23;
+            color: #e0e0e0;
+            min-height: 100vh;
+        }
+        header {
+            background: #16213e;
+            padding: 15px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid #4cc9f0;
+        }
+        header h1 {
+            font-size: 1.3rem;
+            color: #4cc9f0;
+        }
+        header a {
+            color: #4cc9f0;
+            text-decoration: none;
+        }
+        header a:hover {
+            text-decoration: underline;
+        }
+        .main-container {
+            display: flex;
+            height: calc(100vh - 60px);
+        }
+
+        /* Session List Panel */
+        .session-list-panel {
+            width: 300px;
+            background: #1a1a2e;
+            border-right: 1px solid #2B2B43;
+            overflow-y: auto;
+            padding: 10px;
+        }
+        .session-list-title {
+            font-size: 0.9rem;
+            color: #4cc9f0;
+            margin-bottom: 10px;
+            padding-bottom: 5px;
+            border-bottom: 1px solid #2B2B43;
+        }
+        .session-item {
+            background: #0f3460;
+            border-radius: 6px;
+            padding: 10px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .session-item:hover {
+            background: #16213e;
+        }
+        .session-item.selected {
+            outline: 2px solid #4cc9f0;
+        }
+        .session-item .session-id {
+            font-size: 0.85rem;
+            color: #4cc9f0;
+            font-weight: bold;
+        }
+        .session-item .session-info {
+            font-size: 0.75rem;
+            color: #888;
+            margin-top: 4px;
+        }
+        .session-item .session-result {
+            font-size: 0.85rem;
+            margin-top: 6px;
+            font-weight: bold;
+        }
+        .session-item .session-result.profit {
+            color: #26a69a;
+        }
+        .session-item .session-result.loss {
+            color: #ef5350;
+        }
+
+        /* Snapshot List */
+        .snapshot-list {
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #2B2B43;
+        }
+        .snapshot-item {
+            background: #0f3460;
+            border-radius: 4px;
+            padding: 8px;
+            margin-bottom: 5px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: all 0.2s;
+        }
+        .snapshot-item:hover {
+            background: #16213e;
+        }
+        .snapshot-item.selected {
+            outline: 2px solid #ff9800;
+        }
+        .snapshot-action {
+            font-weight: bold;
+        }
+        .snapshot-action.BUY { color: #26a69a; }
+        .snapshot-action.HOLD { color: #4cc9f0; }
+        .snapshot-action.SELL { color: #26a69a; }
+        .snapshot-action.STOP_LOSS { color: #ef5350; }
+
+        /* Detail Panel */
+        .detail-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 15px;
+            overflow-y: auto;
+        }
+        .detail-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .detail-info {
+            background: #1a1a2e;
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+        .detail-info h3 {
+            color: #4cc9f0;
+            font-size: 0.9rem;
+            margin-bottom: 10px;
+        }
+        .info-row {
+            display: flex;
+            margin-bottom: 8px;
+            font-size: 0.85rem;
+        }
+        .info-label {
+            width: 100px;
+            color: #888;
+        }
+        .info-value {
+            color: #e0e0e0;
+        }
+        .thought-box {
+            background: #0f3460;
+            border-radius: 4px;
+            padding: 10px;
+            font-size: 0.85rem;
+            line-height: 1.5;
+            white-space: pre-wrap;
+        }
+
+        /* Tabs */
+        .detail-tabs {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 10px;
+        }
+        .detail-tab {
+            padding: 8px 16px;
+            background: #1a1a2e;
+            border: 1px solid #4cc9f0;
+            border-radius: 4px;
+            color: #4cc9f0;
+            cursor: pointer;
+            font-size: 0.85rem;
+        }
+        .detail-tab:hover {
+            background: #0f3460;
+        }
+        .detail-tab.active {
+            background: #4cc9f0;
+            color: #0f0f23;
+        }
+
+        /* Chart View */
+        .chart-view {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        .tf-tabs {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 10px;
+        }
+        .tf-tab {
+            padding: 6px 15px;
+            background: #1a1a2e;
+            border: 1px solid #4cc9f0;
+            border-radius: 4px;
+            color: #4cc9f0;
+            cursor: pointer;
+            font-size: 0.8rem;
+        }
+        .tf-tab:hover {
+            background: #0f3460;
+        }
+        .tf-tab.active {
+            background: #4cc9f0;
+            color: #0f0f23;
+        }
+        .chart-container {
+            flex: 1;
+            background: #1a1a2e;
+            border-radius: 6px;
+            min-height: 400px;
+            position: relative;
+        }
+        .chart-placeholder {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #888;
+            font-size: 0.9rem;
+        }
+
+        /* Screenshot View */
+        .screenshot-view {
+            flex: 1;
+            display: none;
+            flex-direction: column;
+        }
+        .screenshot-view.visible {
+            display: flex;
+        }
+        .screenshot-container {
+            flex: 1;
+            background: #1a1a2e;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+        .screenshot-container img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+        .screenshot-placeholder {
+            color: #888;
+            font-size: 0.9rem;
+        }
+
+        /* Data View */
+        .data-view {
+            display: none;
+        }
+        .data-view.visible {
+            display: block;
+        }
+        .data-section {
+            background: #1a1a2e;
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 10px;
+        }
+        .data-section h4 {
+            color: #4cc9f0;
+            font-size: 0.85rem;
+            margin-bottom: 10px;
+        }
+        .data-table {
+            width: 100%;
+            font-size: 0.8rem;
+            border-collapse: collapse;
+        }
+        .data-table th, .data-table td {
+            padding: 6px 10px;
+            text-align: left;
+            border-bottom: 1px solid #2B2B43;
+        }
+        .data-table th {
+            color: #888;
+            font-weight: normal;
+        }
+        .horizontal-line-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 5px 0;
+        }
+        .line-color {
+            width: 20px;
+            height: 4px;
+            border-radius: 2px;
+        }
+
+        /* Loading */
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 200px;
+            color: #888;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>MT5 Trader - セッション閲覧</h1>
+        <a href="/">< メイン画面に戻る</a>
+    </header>
+
+    <div class="main-container">
+        <!-- Session List Panel -->
+        <div class="session-list-panel">
+            <div class="snapshot-list" id="snapshotListContainer" style="display: none;">
+                <div class="session-list-title">スナップショット</div>
+                <div id="snapshotList"></div>
+            </div>
+
+            <div class="session-list-title">セッション一覧</div>
+            <div id="sessionList">
+                <div class="loading">読み込み中...</div>
+            </div>
+        </div>
+
+        <!-- Detail Panel -->
+        <div class="detail-panel" id="detailPanel">
+            <div class="loading" id="noSelection">
+                セッションを選択してください
+            </div>
+
+            <div id="snapshotDetail" style="display: none;">
+                <div class="detail-info">
+                    <h3>スナップショット情報</h3>
+                    <div class="info-row">
+                        <span class="info-label">時刻</span>
+                        <span class="info-value" id="snapshotTime">-</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">アクション</span>
+                        <span class="info-value" id="snapshotAction">-</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">思考</span>
+                    </div>
+                    <div class="thought-box" id="snapshotThought">-</div>
+                </div>
+
+                <div class="detail-tabs">
+                    <button class="detail-tab active" onclick="showDetailTab('chart')">チャート</button>
+                    <button class="detail-tab" onclick="showDetailTab('screenshot')">スクリーンショット</button>
+                    <button class="detail-tab" onclick="showDetailTab('data')">数値データ</button>
+                </div>
+
+                <!-- Chart Tab (Interactive) -->
+                <div class="chart-view" id="chartTab">
+                    <div class="tf-tabs" id="chartTfTabs"></div>
+                    <div class="chart-container" id="chartContainer">
+                        <div class="chart-placeholder" id="chartPlaceholder">時間足を選択してください</div>
+                    </div>
+                </div>
+
+                <!-- Screenshot Tab -->
+                <div class="screenshot-view" id="screenshotTab">
+                    <div class="tf-tabs" id="screenshotTfTabs"></div>
+                    <div class="screenshot-container">
+                        <img id="screenshotImg" style="display: none;">
+                        <span class="screenshot-placeholder" id="screenshotPlaceholder">時間足を選択してください</span>
+                    </div>
+                </div>
+
+                <!-- Data Tab -->
+                <div class="data-view" id="dataTab">
+                    <div class="data-section">
+                        <h4>水平線</h4>
+                        <div id="horizontalLinesData">-</div>
+                    </div>
+                    <div class="data-section">
+                        <h4>インジケーター</h4>
+                        <div id="indicatorsData">-</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // State
+        let sessions = [];
+        let selectedSession = null;
+        let selectedSnapshot = null;
+        let currentTimeframe = 'H4';
+        let currentMarketData = null;
+        let currentHorizontalLines = [];
+        let chart = null;
+        let candlestickSeries = null;
+        let horizontalLineSeries = [];
+
+        // Load sessions on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            loadSessions();
+        });
+
+        // Load session list
+        async function loadSessions() {
+            try {
+                const res = await fetch('/api/sessions?limit=50');
+                const data = await res.json();
+                sessions = data.sessions || [];
+                renderSessionList();
+            } catch (e) {
+                console.error('Error loading sessions:', e);
+                document.getElementById('sessionList').innerHTML =
+                    '<div class="loading" style="color: #ef5350;">読み込みエラー</div>';
+            }
+        }
+
+        // Render session list
+        function renderSessionList() {
+            const container = document.getElementById('sessionList');
+            if (sessions.length === 0) {
+                container.innerHTML = '<div class="loading">セッションがありません</div>';
+                return;
+            }
+
+            container.innerHTML = sessions.map(session => {
+                const resultClass = session.result?.profit >= 0 ? 'profit' : 'loss';
+                const resultText = session.result
+                    ? `${session.result.profit >= 0 ? '+' : ''}${session.result.profit.toFixed(2)} (${session.result.profit_pips.toFixed(1)} pips)`
+                    : session.status;
+
+                return `
+                    <div class="session-item ${selectedSession?.session_id === session.session_id ? 'selected' : ''}"
+                         onclick="selectSession('${session.session_id}')">
+                        <div class="session-id">${session.session_id}</div>
+                        <div class="session-info">${session.symbol} | ${(session.hold_count || 0) + 1} snapshots</div>
+                        <div class="session-result ${resultClass}">${resultText}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Snapshot list from API
+        let sessionSnapshots = [];
+
+        // Select a session
+        async function selectSession(sessionId) {
+            try {
+                // Load session details
+                const res = await fetch(`/api/sessions/${sessionId}`);
+                const data = await res.json();
+                selectedSession = data.session;
+                selectedSnapshot = null;
+
+                // Load snapshots list from API
+                const snapshotsRes = await fetch(`/api/sessions/${sessionId}/snapshots`);
+                const snapshotsData = await snapshotsRes.json();
+                sessionSnapshots = snapshotsData.snapshots || [];
+
+                renderSessionList();
+                renderSnapshotList();
+
+                document.getElementById('noSelection').style.display = 'none';
+                document.getElementById('snapshotDetail').style.display = 'none';
+                document.getElementById('snapshotListContainer').style.display = 'block';
+            } catch (e) {
+                console.error('Error loading session:', e);
+            }
+        }
+
+        // Render snapshot list
+        function renderSnapshotList() {
+            const container = document.getElementById('snapshotList');
+
+            if (!selectedSession || sessionSnapshots.length === 0) {
+                container.innerHTML = '<p style="color: #888; font-size: 0.8rem;">スナップショットがありません</p>';
+                return;
+            }
+
+            container.innerHTML = sessionSnapshots.map((snap, idx) => {
+                const time = snap.timestamp ? new Date(snap.timestamp).toLocaleTimeString('ja-JP') : snap.name;
+                return `
+                    <div class="snapshot-item ${selectedSnapshot === idx ? 'selected' : ''}"
+                         onclick="selectSnapshot(${idx})">
+                        <span class="snapshot-action ${snap.action}">${snap.action}</span>
+                        <span style="color: #888; margin-left: 10px;">${time}</span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Select a snapshot
+        async function selectSnapshot(idx) {
+            selectedSnapshot = idx;
+            renderSnapshotList();
+
+            const snap = sessionSnapshots[idx];
+            const folderName = snap.name;
+
+            document.getElementById('snapshotDetail').style.display = 'block';
+            document.getElementById('snapshotTime').textContent = snap.timestamp ? new Date(snap.timestamp).toLocaleString('ja-JP') : folderName;
+            document.getElementById('snapshotAction').textContent = snap.action;
+            document.getElementById('snapshotAction').className = `info-value snapshot-action ${snap.action}`;
+
+            // Load snapshot details
+            try {
+                const res = await fetch(`/api/sessions/${selectedSession.session_id}/snapshots/${folderName}`);
+                const data = await res.json();
+
+                document.getElementById('snapshotThought').textContent = data.thought || '-';
+
+                // Store data for chart rendering
+                currentMarketData = data.market_data;
+                currentHorizontalLines = data.horizontal_lines || [];
+
+                // Render timeframe tabs for chart
+                const chartTfTabs = document.getElementById('chartTfTabs');
+                const timeframes = ['D1', 'H4', 'M15', 'M5', 'M1'];
+                chartTfTabs.innerHTML = timeframes.map(tf =>
+                    `<button class="tf-tab ${tf === currentTimeframe ? 'active' : ''}"
+                             onclick="showChart('${tf}')">${tf}</button>`
+                ).join('');
+
+                // Render timeframe tabs for screenshot
+                const screenshotTfTabs = document.getElementById('screenshotTfTabs');
+                screenshotTfTabs.innerHTML = timeframes.map(tf =>
+                    `<button class="tf-tab ${tf === currentTimeframe ? 'active' : ''}"
+                             onclick="showScreenshot('${tf}', '${folderName}')">${tf}</button>`
+                ).join('');
+
+                // Show current timeframe
+                showChart(currentTimeframe);
+
+                // Store folder name for screenshot tab
+                window.currentFolderName = folderName;
+
+                // Render horizontal lines
+                renderHorizontalLines(data.horizontal_lines);
+
+                // Render indicators
+                renderIndicators(data.market_data);
+
+            } catch (e) {
+                console.error('Error loading snapshot:', e);
+            }
+        }
+
+        // Show interactive chart for timeframe
+        function showChart(tf) {
+            currentTimeframe = tf;
+
+            // Update tab active state
+            document.querySelectorAll('#chartTfTabs .tf-tab').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.textContent === tf) btn.classList.add('active');
+            });
+
+            const container = document.getElementById('chartContainer');
+            const placeholder = document.getElementById('chartPlaceholder');
+
+            if (!currentMarketData || !currentMarketData.timeframes || !currentMarketData.timeframes[tf]) {
+                placeholder.textContent = 'データがありません';
+                placeholder.style.display = 'flex';
+                if (chart) {
+                    chart.remove();
+                    chart = null;
+                }
+                return;
+            }
+
+            placeholder.style.display = 'none';
+
+            // Remove existing chart
+            if (chart) {
+                chart.remove();
+            }
+
+            // Create new chart
+            chart = LightweightCharts.createChart(container, {
+                width: container.clientWidth,
+                height: container.clientHeight,
+                layout: {
+                    background: { type: 'solid', color: '#1a1a2e' },
+                    textColor: '#d1d4dc',
+                },
+                grid: {
+                    vertLines: { color: '#2B2B43' },
+                    horzLines: { color: '#2B2B43' },
+                },
+                crosshair: {
+                    mode: LightweightCharts.CrosshairMode.Normal,
+                },
+                rightPriceScale: {
+                    borderColor: '#2B2B43',
+                },
+                timeScale: {
+                    borderColor: '#2B2B43',
+                    timeVisible: true,
+                    secondsVisible: false,
+                },
+            });
+
+            // Add candlestick series
+            candlestickSeries = chart.addCandlestickSeries({
+                upColor: '#26a69a',
+                downColor: '#ef5350',
+                borderUpColor: '#26a69a',
+                borderDownColor: '#ef5350',
+                wickUpColor: '#26a69a',
+                wickDownColor: '#ef5350',
+            });
+
+            // Convert OHLC data to chart format
+            const tfData = currentMarketData.timeframes[tf];
+            const chartData = tfData.ohlc.map(candle => ({
+                time: new Date(candle.time).getTime() / 1000,
+                open: candle.open,
+                high: candle.high,
+                low: candle.low,
+                close: candle.close,
+            }));
+
+            candlestickSeries.setData(chartData);
+
+            // Add horizontal lines
+            horizontalLineSeries = [];
+            if (currentHorizontalLines && currentHorizontalLines.length > 0) {
+                currentHorizontalLines.forEach(line => {
+                    // Create a price line for each horizontal line
+                    const priceLine = candlestickSeries.createPriceLine({
+                        price: line.price,
+                        color: line.color || '#ffffff',
+                        lineWidth: 1,
+                        lineStyle: LightweightCharts.LineStyle.Solid,
+                        axisLabelVisible: true,
+                        title: line.name || '',
+                    });
+                    horizontalLineSeries.push(priceLine);
+                });
+            }
+
+            // Fit content
+            chart.timeScale().fitContent();
+
+            // Handle resize
+            const resizeObserver = new ResizeObserver(entries => {
+                if (chart) {
+                    const { width, height } = entries[0].contentRect;
+                    chart.applyOptions({ width, height });
+                }
+            });
+            resizeObserver.observe(container);
+        }
+
+        // Show screenshot for timeframe
+        function showScreenshot(tf, folderName) {
+            currentTimeframe = tf;
+
+            // Update tab active state
+            document.querySelectorAll('#screenshotTfTabs .tf-tab').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.textContent === tf) btn.classList.add('active');
+            });
+
+            const img = document.getElementById('screenshotImg');
+            const placeholder = document.getElementById('screenshotPlaceholder');
+
+            const url = `/api/sessions/${selectedSession.session_id}/snapshots/${folderName}/image/${tf}`;
+            img.src = url;
+            img.style.display = 'block';
+            placeholder.style.display = 'none';
+
+            img.onerror = () => {
+                img.style.display = 'none';
+                placeholder.style.display = 'block';
+                placeholder.textContent = 'スクリーンショットが見つかりません';
+            };
+        }
+
+        // Show detail tab
+        function showDetailTab(tab) {
+            document.querySelectorAll('.detail-tab').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+
+            document.getElementById('chartTab').style.display = tab === 'chart' ? 'flex' : 'none';
+            document.getElementById('screenshotTab').className = tab === 'screenshot' ? 'screenshot-view visible' : 'screenshot-view';
+            document.getElementById('dataTab').className = tab === 'data' ? 'data-view visible' : 'data-view';
+
+            if (tab === 'chart') {
+                // Re-render chart when switching back
+                setTimeout(() => showChart(currentTimeframe), 100);
+            } else if (tab === 'screenshot' && window.currentFolderName) {
+                showScreenshot(currentTimeframe, window.currentFolderName);
+            }
+        }
+
+        // Render horizontal lines
+        function renderHorizontalLines(lines) {
+            const container = document.getElementById('horizontalLinesData');
+            if (!lines || lines.length === 0) {
+                container.innerHTML = '<span style="color: #888;">水平線なし</span>';
+                return;
+            }
+
+            container.innerHTML = lines.map(line => `
+                <div class="horizontal-line-item">
+                    <div class="line-color" style="background: ${line.color}"></div>
+                    <span>${line.name}</span>
+                    <span style="color: #4cc9f0; margin-left: auto;">${line.price.toFixed(2)}</span>
+                </div>
+            `).join('');
+        }
+
+        // Render indicators
+        function renderIndicators(marketData) {
+            const container = document.getElementById('indicatorsData');
+            if (!marketData || !marketData.timeframes) {
+                container.innerHTML = '<span style="color: #888;">データなし</span>';
+                return;
+            }
+
+            // Create table with all timeframes
+            const timeframes = ['D1', 'H4', 'M15', 'M5', 'M1'];
+            const indicators = ['rsi', 'macd', 'macd_signal', 'sma_20', 'sma_50', 'ema_20', 'bb_upper', 'bb_middle', 'bb_lower'];
+            const indicatorNames = {
+                'rsi': 'RSI',
+                'macd': 'MACD',
+                'macd_signal': 'MACD Signal',
+                'sma_20': 'SMA 20',
+                'sma_50': 'SMA 50',
+                'ema_20': 'EMA 20',
+                'bb_upper': 'BB Upper',
+                'bb_middle': 'BB Middle',
+                'bb_lower': 'BB Lower'
+            };
+
+            let html = '<table class="data-table"><tr><th></th>';
+            timeframes.forEach(tf => {
+                html += `<th>${tf}</th>`;
+            });
+            html += '</tr>';
+
+            indicators.forEach(ind => {
+                html += `<tr><th>${indicatorNames[ind]}</th>`;
+                timeframes.forEach(tf => {
+                    const tfData = marketData.timeframes[tf];
+                    const value = tfData?.indicators?.[ind];
+                    const formatted = value !== null && value !== undefined
+                        ? (ind === 'rsi' ? value.toFixed(1) : value.toFixed(2))
+                        : '-';
+                    html += `<td>${formatted}</td>`;
+                });
+                html += '</tr>';
+            });
+
+            html += '</table>';
+            container.innerHTML = html;
+        }
+    </script>
+</body>
+</html>

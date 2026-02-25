@@ -96,10 +96,48 @@ MT5/
 ├── models/               # データモデル
 ├── mql5/                 # MQL5ファイル（MT5用）
 ├── templates/            # Webフロントエンド
-├── data/                 # 収集データ
-│   └── sessions/         # セッションデータ
+├── data/                 # 収集データ（下記参照）
 └── docs/                 # ドキュメント
 ```
+
+---
+
+## 保存データ構造
+
+セッション管理機能により、以下のデータが `data/` フォルダに保存されます。
+
+```
+data/
+├── screenshots/          # 一時スクリーンショット（gitignore対象）
+├── sessions/             # セッションデータ（gitで管理可能）
+│   └── session_YYYYMMDD_HHMMSS/
+│       ├── session.json           # セッション概要・結果
+│       └── snapshots/
+│           └── YYYYMMDD_HHMMSS_ACTION/
+│               ├── thought.json          # 思考（テキスト）
+│               ├── market_data.json      # OHLC + テクニカル指標
+│               ├── horizontal_lines.json # MT5水平線データ
+│               └── screenshots/
+│                   ├── D1.png, H4.png, M15.png, M5.png, M1.png
+```
+
+### 保存ファイル詳細
+
+| ファイル | 内容 | 用途 |
+|---------|------|------|
+| `session.json` | セッション概要（entry/exit/holds/result） | セッション一覧表示 |
+| `thought.json` | トレーダーの思考・判断理由 | 模倣学習のラベル |
+| `market_data.json` | 5時間足のOHLC + RSI/MACD/SMA/EMA/BB | 学習データ入力 |
+| `horizontal_lines.json` | MT5で描画した水平線（価格・色） | 学習データ入力 |
+| `*.png` | MT5チャートのスクリーンショット | 画像ベース学習 |
+
+### データ保存タイミング
+
+| アクション | 保存内容 |
+|-----------|---------|
+| **BUY** | セッション開始 + スナップショット |
+| **HOLD** | スナップショット追加 |
+| **SELL/STOP_LOSS** | セッション終了 + スナップショット + 結果計算 |
 
 ---
 

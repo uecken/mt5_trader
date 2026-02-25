@@ -21,7 +21,9 @@ build/
 .env
 .env.local
 
-# Data directories - all tracked in git
+# Data directories
+data/screenshots/*.png
+!data/screenshots/.gitkeep
 
 # Logs
 *.log
